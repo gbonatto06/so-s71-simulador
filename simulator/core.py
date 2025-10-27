@@ -81,76 +81,57 @@ class Simulator:
 
     def tick(self):
         """
-        Avança um "tick" do relógio global (Req 1.1).
-        Este é o coração da simulação.
+        Avança um "tick" do relógio global.
         """
         
         log_eventos_tick = f"[Tick {self.relogio_global}]:"
         
-        # Verificar ingresso de novas tarefas
+        # Verifica ingresso de novas tarefas
+        # Tarefas que chegam 'agora' podem competir pela CPU
         for t in self.tarefas:
             if t.estado == TaskState.NOVA and t.ingresso == self.relogio_global:
                 t.estado = TaskState.PRONTA
                 self.fila_prontos.append(t)
                 log_eventos_tick += f" Tarefa {t.id} ingressou;"
 
-        # Atualizar tempos de espera
+        # Atualizar tempos de espera de quem está na fila
         for t in self.fila_prontos:
             t.tempo_espera += 1
 
-        # Processar a tarefa em execução
-        preemptar = False
+        # Verificar estado da tarefa atual (se ela terminou ou foi preemptada)
+        preemptar_quantum = False
         tarefa_terminou = False
         
         if self.tarefa_executando:
             t = self.tarefa_executando
-            t.tempo_executado += 1
-            t.quantum_utilizado += 1
             
-            # Adiciona ao log do Gantt
-            self.gantt_log.append({'tick': self.relogio_global, 'task_id': t.id, 'cor': t.cor})
-            log_eventos_tick += f" Tarefa {t.id} executou;"
-
-            # Tarefa terminou?
+            # Verificação de Término
             if t.tempo_executado == t.duracao:
                 t.estado = TaskState.TERMINADA
-                t.tick_conclusao = self.relogio_global
-                self.tarefa_executando = None
+                t.tick_conclusao = self.relogio_global # Terminou antes deste tick
                 self.tarefas_concluidas += 1
                 log_eventos_tick += f" Tarefa {t.id} terminou;"
+                self.tarefa_executando = None
                 tarefa_terminou = True
             
-            #  Quantum estourou? (Preempção)
+            # Verificação de Quantum
             elif t.quantum_utilizado == self.quantum:
-                preemptar = True
+                preemptar_quantum = True
                 log_eventos_tick += f" Tarefa {t.id} sofreu preempção (quantum);"
-
-        else:
-            # CPU ociosa
-            self.gantt_log.append({'tick': self.relogio_global, 'task_id': 'idle', 'cor': '#FFFFFF'})
-            log_eventos_tick += " CPU ociosa;"
 
 
         # Decisão de Escalonamento
-        # Ocorre se:
-        #    a) A CPU está livre (tarefa terminou ou estava ociosa)
-        #    b) Houve preempção por quantum
-        #    c) Uma nova tarefa mais prioritária chegou
-        
-        # Chamamos o escalonador para obter o próximo candidato
-        # (Passamos a fila, a tarefa atual, e o tipo de evento)
+        # (Sempre decide, mas os preemptivos usarão as novas infos da fila)
         proxima_tarefa = self.escalonador.decidir(
             self.fila_prontos, 
             self.tarefa_executando, 
-            preemptar or tarefa_terminou
+            preemptar_quantum or tarefa_terminou
         )
 
         # Troca de Contexto
         if proxima_tarefa != self.tarefa_executando:
             
-            # Se a tarefa antiga (self.tarefa_executando) existe E não terminou,
-            # ela foi preemptada (seja por quantum OU prioridade).
-            # Devolve ela para a fila de prontos.
+            # Se a tarefa antiga existe e não terminou, devolve para a fila
             t_antigo = self.tarefa_executando
             if t_antigo and not tarefa_terminou:
                 t_antigo.estado = TaskState.PRONTA
@@ -161,13 +142,27 @@ class Simulator:
             # Nova tarefa assume a CPU
             self.tarefa_executando = proxima_tarefa
             if self.tarefa_executando:
-                # Tirar da fila de prontos
                 if self.tarefa_executando in self.fila_prontos:
-                    self.fila_prontos.remove(self.tarefa_executando)
+                     self.fila_prontos.remove(self.tarefa_executando)
                 
                 self.tarefa_executando.estado = TaskState.EXECUTANDO
                 self.tarefa_executando.quantum_utilizado = 0
                 log_eventos_tick += f" Escalonador escolheu {self.tarefa_executando.id};"
+
+        # Executar o tick
+        # Processa a tarefa que ganhou a CPU para este tick)
+        if self.tarefa_executando:
+            t = self.tarefa_executando
+            t.tempo_executado += 1
+            t.quantum_utilizado += 1
+            
+            # Adiciona ao log do Gantt
+            self.gantt_log.append({'tick': self.relogio_global, 'task_id': t.id, 'cor': t.cor})
+            log_eventos_tick += f" Tarefa {t.id} executou;"
+        else:
+            # CPU ociosa
+            self.gantt_log.append({'tick': self.relogio_global, 'task_id': 'idle', 'cor': '#FFFFFF'})
+            log_eventos_tick += " CPU ociosa;"
 
         # Avançar o relógio
         self.relogio_global += 1

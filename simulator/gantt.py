@@ -43,7 +43,7 @@ def gerar_imagem_gantt(gantt_log, tarefas, nome_arquivo_saida):
     # Mapeia ID da tarefa para uma posição Y
     task_map = {task_id: i for i, task_id in enumerate(task_ids)}
     
-    y_altura = 9 # Altura de cada barra
+    y_altura = 4 # Altura de cada barra
     y_padding = 10 # Espaçamento (altura + margem)
 
     # Configurações do Eixo Y(tarefas)

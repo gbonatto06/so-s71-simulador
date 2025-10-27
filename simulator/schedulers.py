@@ -16,24 +16,28 @@ class Scheduler(ABC):
 
 class FIFO(Scheduler):
     """ 
-    Escalonador First-In, First-Out. 
-    Ele só toma uma decisão se a tarefa atual terminar ou o quantum estourar.
+    Escalonador First-In, First-Out (Não-preemptivo). 
+    IGNORA preempção por quantum.
     """
     def decidir(self, fila_prontos, tarefa_atual, mudanca_contexto_obrigatoria):
-        # FIFO não é preemptivo, então se a tarefa atual existe e não 
-        # terminou ou sofreu quantum, ela continua.
-        if tarefa_atual and not mudanca_contexto_obrigatoria:
+
+        # Se uma tarefa já está executando (e não terminou, 
+        # pois se tivesse terminado, 'tarefa_atual' seria None vindo do core.py),
+        # ela DEVE continuar. FIFO é NÃO-PREEMPTIVO.
+        if tarefa_atual:
             return tarefa_atual
-        
-        # Se a CPU está livre e há tarefas na fila:
+
+        # Se a CPU está livre (tarefa_atual é None) E há tarefas na fila:
         if fila_prontos:
             # Encontra a tarefa que está esperando há mais tempo
             # (maior tempo_espera == chegou primeiro na fila)
             tarefa_escolhida = max(fila_prontos, key=lambda t: t.tempo_espera)
             return tarefa_escolhida
-        
-        # Se a fila está vazia e a tarefa atual terminou, não retorna nada
+
+        # Se a fila está vazia
         return None
+
+
 
 class SRTF(Scheduler):
     """ 

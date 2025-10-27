@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-
+from simulator.core import TaskState
 # ABC (Abstract Base Class) nos permite criar uma interface
 # Isso garante que todo escalonador tenha o método 'decidir'
 class Scheduler(ABC):

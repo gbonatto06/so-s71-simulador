@@ -20,7 +20,3 @@ COPY . .
 # Define o "comando" padrão que será executado
 # Isso rodará "python main.py"
 ENTRYPOINT ["python", "main.py"]
-
-# Define os "argumentos" padrão para o comando
-# (pode ser sobrescrito na linha de comando do docker run)
-CMD ["config.txt", "--modo", "completo", "--saida", "gantt_docker.png"]

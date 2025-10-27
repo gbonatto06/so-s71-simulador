@@ -146,7 +146,7 @@ class Simulator:
         )
 
         # Troca de Contexto
-	if proxima_tarefa != self.tarefa_executando:
+        if proxima_tarefa != self.tarefa_executando:
             
             # Se a tarefa antiga (self.tarefa_executando) existe E não terminou,
             # ela foi preemptada (seja por quantum OU prioridade).
@@ -163,7 +163,7 @@ class Simulator:
             if self.tarefa_executando:
                 # Tirar da fila de prontos
                 if self.tarefa_executando in self.fila_prontos:
-                     self.fila_prontos.remove(self.tarefa_executando)
+                    self.fila_prontos.remove(self.tarefa_executando)
                 
                 self.tarefa_executando.estado = TaskState.EXECUTANDO
                 self.tarefa_executando.quantum_utilizado = 0

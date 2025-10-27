@@ -146,14 +146,17 @@ class Simulator:
         )
 
         # Troca de Contexto
-        if proxima_tarefa != self.tarefa_executando:
+	if proxima_tarefa != self.tarefa_executando:
             
-            # Se a tarefa antiga foi preemptada, devolve para a fila
-            if preemptar and self.tarefa_executando:
-                t_antigo = self.tarefa_executando
+            # Se a tarefa antiga (self.tarefa_executando) existe E não terminou,
+            # ela foi preemptada (seja por quantum OU prioridade).
+            # Devolve ela para a fila de prontos.
+            t_antigo = self.tarefa_executando
+            if t_antigo and not tarefa_terminou:
                 t_antigo.estado = TaskState.PRONTA
                 t_antigo.quantum_utilizado = 0
                 self.fila_prontos.append(t_antigo)
+                log_eventos_tick += f" Tarefa {t_antigo.id} voltou para Prontos (preemptada);"
             
             # Nova tarefa assume a CPU
             self.tarefa_executando = proxima_tarefa
@@ -165,7 +168,7 @@ class Simulator:
                 self.tarefa_executando.estado = TaskState.EXECUTANDO
                 self.tarefa_executando.quantum_utilizado = 0
                 log_eventos_tick += f" Escalonador escolheu {self.tarefa_executando.id};"
-        
+
         # Avançar o relógio
         self.relogio_global += 1
         return log_eventos_tick

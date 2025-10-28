@@ -166,7 +166,7 @@ def main():
 
         elif escolha == '4':
             # Sair
-            print("Saindo do simulador. Até logo!")
+            print("Saindo do simulador.")
             break
             
         else:

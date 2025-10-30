@@ -31,7 +31,7 @@ def carregar_configuracao_arquivo(caminho_arquivo):
         else:
             raise ValueError(f"Algoritmo de escalonamento '{algoritmo}' desconhecido.")
             
-        # Cria o Simulador
+        # Cria o Simulador do core.py para iniciar uma nova simulacao
         simulador = Simulator(escalonador, quantum)
         
         # Linhas 2..N: Tarefas

@@ -18,6 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copia todo o código da nossa aplicação para dentro do container
 COPY . .
+#diretorio dos usuarios
+WORKDIR /data
 
 # Define o "comando" padrão que será executado
 # Isso rodará "python main.py"

@@ -33,7 +33,8 @@ def carregar_configuracao_arquivo(caminho_arquivo):
             
         # Cria o Simulador do core.py para iniciar uma nova simulacao
         simulador = Simulator(escalonador, quantum)
-        
+        simulador.nome_algoritmo_config = algoritmo #nome para o grafico
+
         # Linhas 2..N: Tarefas
         for i, linha in enumerate(linhas[1:], start=2):
             partes = linha.strip().split(';')

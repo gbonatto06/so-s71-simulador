@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-def gerar_imagem_gantt(gantt_log, tarefas, nome_arquivo_saida):
+def gerar_imagem_gantt(gantt_log, tarefas, nome_arquivo_saida, nome_algoritmo):
     """
     Gera o gráfico de Gantt e salva em um arquivo PNG
     """
@@ -88,8 +88,9 @@ def gerar_imagem_gantt(gantt_log, tarefas, nome_arquivo_saida):
     ]
     plt.legend(handles=patches, bbox_to_anchor=(1.02, 1), loc='upper left')
     
-    # Título do Gráfico
-    plt.title("Gráfico de Gantt da Execução", fontsize=16)
+    # Título do Gráfico, utiliza a variavel da TCB para o nome do escalonador
+    # usado na execucao atual
+    plt.title(f"Gráfico de Gantt(Algoritmo: {nome_algoritmo.upper()})", fontsize=16)
 
     # Salva o arquivo
     try:

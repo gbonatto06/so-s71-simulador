@@ -104,7 +104,8 @@ def rodar_modo_completo(arquivo_config):
         gerar_imagem_gantt(
             simulador.gantt_log,
             simulador.tarefas,
-            nome_saida
+            nome_saida,
+	    simulador.nome_algoritmo_config #Nome do algoritmo usado para o titulo do grafico
         )
     except Exception as e:
         print(f"Erro crítico ao gerar o gráfico: {e}", file=sys.stderr)

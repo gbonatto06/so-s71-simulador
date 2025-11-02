@@ -25,6 +25,8 @@ class TCB:
         self.tempo_espera = 0
         self.quantum_utilizado = 0
         self.tick_conclusao = -1
+	self.nome_algoritmo_config = "Desconhecido"  #Usado para imprimir o nome do algoritmo no grafico de gantt
+
 
     def __repr__(self):
         """ Representação textual para debug. """

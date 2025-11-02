@@ -26,7 +26,7 @@ def carregar_configuracao_arquivo(caminho_arquivo):
             escalonador = FIFO()
         elif algoritmo.upper() == 'SRTF':
             escalonador = SRTF()
-        elif algoritmo.upper() == 'Prioridade'.upper(): # Usamos .upper() para ser flexível
+        elif algoritmo.upper() == 'PrioridadeP'.upper(): # Usamos .upper() para ser flexível
             escalonador = PriorityPreemptive()
         else:
             raise ValueError(f"Algoritmo de escalonamento '{algoritmo}' desconhecido.")

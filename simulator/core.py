@@ -25,7 +25,6 @@ class TCB:
         self.tempo_espera = 0
         self.quantum_utilizado = 0
         self.tick_conclusao = -1
-		self.nome_algoritmo_config = "Desconhecido"  #Usado para imprimir o nome do algoritmo no grafico de gantt
 
 
     def __repr__(self):
@@ -57,6 +56,7 @@ class Simulator:
         self.relogio_global = 0		#inicia um novo relogio global
         self.quantum = int(quantum)	#quantum enviado pelo parser do config.txt
         self.escalonador = escalonador	#definido o escalonador eviado pelo parser.py
+        self.nome_algoritmo_config = "Desconhecido"  #Usado para imprimir o nome do algoritmo no grafico de gantt
         self.tarefas = []              # Lista mestre de todos os TCBs
         self.fila_prontos = []         # Fila de tarefas PRONTAS
         self.tarefa_executando = None  #a cpu comeca vazia

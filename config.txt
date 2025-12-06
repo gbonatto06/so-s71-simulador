@@ -1,4 +1,4 @@
-FIFO;2
+SRTF;2
 T1;red;0;6;2
 T2;green;1;4;5
 T3;blue;2;2;1

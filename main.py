@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import subprocess
+import re  # validar a cor Hexadecimal
 
 # Importamos também a função de carregar plugins explicitamente
 from simulator.parser import carregar_configuracao_arquivo, carregar_plugins
@@ -37,6 +38,7 @@ def exibir_debugger(simulador):
     print("="*60)
     print(f"MODO DEBUGGER (PASSO-A-PASSO) - {simulador.escalonador.__class__.__name__}")
     print("="*60)
+    # A string retornada aqui já contém o status do escalonador (definido no core.py)
     print(simulador.get_debug_info())
     print("\n" + "="*60)
 
@@ -187,11 +189,18 @@ def rodar_modo_passo_a_passo(arquivo_config, plugins_ativos):
             elif comando == 'n': #insercao dinamica
                 print("\n--- INSERIR TAREFA DINÂMICA ---")
                 try:
-                    # 1. Salva o estado ATUAL antes de mexer
+                    # 1. Salva o estado atual antes de mexer
                     simulador.salvar_estado()
                     
                     t_id = input("ID da Tarefa (ex: T_Extra): ").strip()
-                    t_cor = input("Cor (ex: magenta, #123456): ").strip()
+                    t_cor = input("Cor (ex: magenta, 123456 ou FF00DD): ").strip()
+                    
+                    # Validação de Cor Hexadecimal
+                    # Se o usuário digitou Hex sem #, adicionamos o #
+                    if re.fullmatch(r'[0-9A-Fa-f]{6}', t_cor):
+                        t_cor = f"#{t_cor}"
+                    # ----------------------------------------------------------------
+
                     t_dur = int(input("Duração (ticks): "))
                     t_prio = int(input("Prioridade (inteiro): "))
                     

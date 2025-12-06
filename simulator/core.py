@@ -61,6 +61,7 @@ class Simulator:
         self.tarefas_concluidas = 0
         
         self.historico = []  # Lista para o histórico
+        self.scheduler_called_last_tick = False # DEBUG: Flag para saber se o escalonador rodou
 
     def adicionar_tarefa(self, tcb):
         # VALIDAÇÃO DE ID DUPLICADO
@@ -79,7 +80,7 @@ class Simulator:
     # Undo
 
     def salvar_estado(self):
-        """Salva uma cópia profunda (snapshot) do estado atual."""
+        """Salva um snapshot do estado atual."""
         # Removemos temporariamente o histórico para não copiar recursivamente
         historico_temp = self.historico
         self.historico = [] 
@@ -113,7 +114,11 @@ class Simulator:
 
     def get_debug_info(self):
         """ Retorna o estado atual do sistema para o debugger """
-        header = f"--- [TICK: {self.relogio_global}] ---"
+        
+        # Informação visual sobre o Scheduler
+        status_scheduler = "ATIVO" if self.scheduler_called_last_tick else "INATIVO"
+        
+        header = f"--- [TICK: {self.relogio_global}] | ESCALONADOR: {status_scheduler} ---"
         
         exec_task = self.tarefa_executando.id if self.tarefa_executando else "Nenhuma"
         exec_info = f"CPU: [ {exec_task} ]"
@@ -134,14 +139,21 @@ class Simulator:
         # Salvar o estado antes de mudar qualquer coisa
         self.salvar_estado() 
         
+        # Reseta a flag de debug do scheduler para este tick
+        self.scheduler_called_last_tick = False
+
         log_eventos_tick = f"[Tick {self.relogio_global}]:"
         
+        # Flag do escalonador, para intervir se algo mudar
+        precisa_escalonar = False
+
         # Verifica ingresso de novas tarefas
         for t in self.tarefas:
             if t.estado == TaskState.NOVA and t.ingresso == self.relogio_global:
                 t.estado = TaskState.PRONTA
                 self.fila_prontos.append(t)
                 log_eventos_tick += f" Tarefa {t.id} ingressou;"
+                precisa_escalonar = True # EVENTO 1: Nova tarefa pode exigir preempção
 
         # Atualizar tempos de espera de quem está na fila
         for t in self.fila_prontos:
@@ -162,47 +174,57 @@ class Simulator:
                 log_eventos_tick += f" Tarefa {t.id} terminou;"
                 self.tarefa_executando = None
                 tarefa_terminou = True 
+                precisa_escalonar = True # EVENTO 2: CPU ficou livre
             
             # Verificação de Quantum
             elif t.quantum_utilizado == self.quantum:
                 preemptar_quantum = True 
                 log_eventos_tick += f" Tarefa {t.id} sofreu preempção (quantum);"
+                precisa_escalonar = True # EVENTO 3: Tempo da tarefa acabou
 
+        # Caso CPU vazia mas tem gente esperando
+        elif self.fila_prontos:
+            precisa_escalonar = True # EVENTO 4: CPU Ociosa
 
         # Decisão de Escalonamento
-        proxima_tarefa = self.escalonador.decidir(
-            self.fila_prontos, 
-            self.tarefa_executando, 
-            preemptar_quantum or tarefa_terminou 
-        )
+        # Só chamamos o decidir se houve evento de escalonamento
+        if precisa_escalonar:
+            self.scheduler_called_last_tick = True # DEBUG: Marca que rodou
+            
+            proxima_tarefa = self.escalonador.decidir(
+                self.fila_prontos, 
+                self.tarefa_executando, 
+                preemptar_quantum or tarefa_terminou 
+            )
 
-        # Troca de Contexto
-        if proxima_tarefa != self.tarefa_executando:
-            
-            # Se a tarefa antiga existe e não terminou, devolve para a fila
-            t_antigo = self.tarefa_executando
-            if t_antigo and not tarefa_terminou:
-                t_antigo.estado = TaskState.PRONTA
-                t_antigo.quantum_utilizado = 0    
-                self.fila_prontos.append(t_antigo)
-                log_eventos_tick += f" Tarefa {t_antigo.id} voltou para Prontos (preemptada);"
-            
-            # Nova tarefa assume a CPU
-            self.tarefa_executando = proxima_tarefa
-            if self.tarefa_executando: 
-                if self.tarefa_executando in self.fila_prontos:
-                     self.fila_prontos.remove(self.tarefa_executando)
+            # Troca de Contexto
+            if proxima_tarefa != self.tarefa_executando:
                 
-                self.tarefa_executando.estado = TaskState.EXECUTANDO
-                self.tarefa_executando.quantum_utilizado = 0
-                log_eventos_tick += f" Escalonador escolheu {self.tarefa_executando.id};"
-
-
+                # Se a tarefa antiga existe e não terminou, devolve para a fila
+                t_antigo = self.tarefa_executando
+                if t_antigo and not tarefa_terminou:
+                    t_antigo.estado = TaskState.PRONTA
+                    t_antigo.quantum_utilizado = 0     
+                    self.fila_prontos.append(t_antigo)
+                    log_eventos_tick += f" Tarefa {t_antigo.id} voltou para Prontos (preemptada);"
+                
+                # Nova tarefa assume a CPU
+                self.tarefa_executando = proxima_tarefa
+                if self.tarefa_executando: 
+                    if self.tarefa_executando in self.fila_prontos:
+                         self.fila_prontos.remove(self.tarefa_executando)
+                    
+                    self.tarefa_executando.estado = TaskState.EXECUTANDO
+                    self.tarefa_executando.quantum_utilizado = 0
+                    log_eventos_tick += f" Escalonador escolheu {self.tarefa_executando.id};"
+        
         elif self.tarefa_executando and preemptar_quantum:
-            # A tarefa continua,
-            # Mas o quantum estourou. Precisamos zerar o contador para iniciar um novo ciclo.
-            self.tarefa_executando.quantum_utilizado = 0
-            log_eventos_tick += f" Tarefa {self.tarefa_executando.id} renovou quantum (RR);"
+            # Quantum estourou, precisou escalonar, mas o escalonador 
+            # decidiu manter a mesma tarefa (ex: só tem ela).
+            # Precisamos zerar o quantum mesmo assim.
+             self.tarefa_executando.quantum_utilizado = 0
+             log_eventos_tick += f" Tarefa {self.tarefa_executando.id} renovou quantum (RR);"
+
 
         # Executar o tick
         if self.tarefa_executando:

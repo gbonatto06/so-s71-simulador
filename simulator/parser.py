@@ -2,8 +2,23 @@ import os
 import sys
 import importlib.util
 import inspect
+import re
 from simulator.core import Simulator, TCB
 from simulator.schedulers import FIFO, SRTF, PriorityPreemptive, RoundRobin, Scheduler
+
+def _normalizar_cor(cor_str):
+    """
+    Verifica se a cor está no formato Hexadecimal sem '#'
+    Se estiver sem, adiciona o '#' para o Matplotlib entender.
+    Se for uma cor nomeada (ex: "red") ou já tiver '#', mantém como está.
+    """
+    cor_limpa = cor_str.strip()
+    
+    # Regex para verificar se são exatamente 6 caracteres hexadecimais (0-9, A-F)
+    if re.fullmatch(r'[0-9A-Fa-f]{6}', cor_limpa):
+        return f"#{cor_limpa}"
+    
+    return cor_limpa
 
 def carregar_plugins(diretorio_plugins="extensions"):
     """
@@ -93,9 +108,14 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
             raise ValueError("Linha de sistema mal formatada.")
             
         algoritmo_nome = linha_sistema[0].strip()
-        quantum = int(linha_sistema[1].strip())
         
-        # --- BUSCA O ESCALONADOR (Passando os plugins) ---
+        # Conversão segura de quantum
+        try:
+            quantum = int(linha_sistema[1].strip())
+        except ValueError:
+            raise ValueError(f"Quantum inválido: {linha_sistema[1]}")
+        
+        # Busca o escalonador
         escalonador = obter_escalonador(algoritmo_nome, quantum, plugins_externos)
         
         if escalonador is None:
@@ -113,15 +133,23 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
             partes = linha.strip().split(';')
             if len(partes) < 5:
                 raise ValueError(f"Linha {i} mal formatada.")
-                
-            tcb = TCB(
-                id=partes[0].strip(),
-                cor=partes[1].strip(),
-                ingresso=partes[2].strip(),
-                duracao=partes[3].strip(),
-                prioridade=partes[4].strip()
-            )
-            simulador.adicionar_tarefa(tcb)
+            
+            # Tratamento da COR
+            cor_processada = _normalizar_cor(partes[1])
+
+            # Criação do TCB com conversão de tipos
+            # Isso é crucial para que o algoritmo consiga somar/subtrair tempos
+            try:
+                tcb = TCB(
+                    id=partes[0].strip(),
+                    cor=cor_processada,       # Cor normalizada, aceita com # e sem
+                    ingresso=int(partes[2]),  # Int
+                    duracao=int(partes[3]),   # Int
+                    prioridade=int(partes[4]) # Int
+                )
+                simulador.adicionar_tarefa(tcb)
+            except ValueError as ve:
+                raise ValueError(f"Erro de conversão numérica na linha {i}: {ve}")
             
         print(f"Sistema carregado: {algoritmo_nome}, Quantum={quantum}, Tarefas={len(simulador.tarefas)}")
         return simulador

@@ -47,7 +47,8 @@ A única ferramenta necessária é o **Docker**.
 
 ~~~bash
 sudo apt update
-sudo apt install docker.io -y
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
 ~~~
 
 ---

@@ -1,7 +1,5 @@
 Simulador de Escalonador de Processos (SO)
-Universidade Tecnológica Federal do Paraná (UTFPR) - Câmpus Curitiba > Curso: Sistemas de Informação
-
-Disciplina: Sistemas Operacionais
+Universidade Tecnológica Federal do Paraná (UTFPR) - Câmpus Curitiba > Curso: Sistemas de Informação > Disciplina: Sistemas Operacionais
 
 Este projeto implementa um simulador visual de um sistema operacional multitarefa. Ele permite visualizar o comportamento de diferentes algoritmos de escalonamento, gerando gráficos de Gantt e oferecendo modos de execução passo-a-passo com recursos avançados de depuração.
 

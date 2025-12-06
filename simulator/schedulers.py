@@ -68,7 +68,11 @@ class PriorityPreemptive(Scheduler):
         candidatos = list(fila_prontos)
         if tarefa_atual and tarefa_atual.estado == TaskState.EXECUTANDO:
             candidatos.append(tarefa_atual)
-        return _escolher_com_desempate(candidatos, tarefa_atual, lambda t: -t.prioridade)
+        
+        # Usar Prioridade Dinâmica
+        # Isso permite que a Herança de Prioridade feita no Core tenha efeito.
+        # Se não houver herança nem aging, a dinâmica é igual à estática, então não quebra nada.
+        return _escolher_com_desempate(candidatos, tarefa_atual, lambda t: -t.prioridade_dinamica)
 
 class PriorityAging(Scheduler):
     def __init__(self, alpha):

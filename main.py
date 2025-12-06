@@ -125,7 +125,9 @@ def rodar_modo_completo(arquivo_config, plugins_ativos):
             simulador.gantt_log,
             simulador.tarefas,
             nome_saida,
-            simulador.nome_algoritmo_config
+            simulador.nome_algoritmo_config,
+            simulador.bloqueio_log,
+            simulador.mutex_event_log 
         )
         print(f"Gráfico salvo com sucesso.")
     except Exception as e:
@@ -156,7 +158,9 @@ def rodar_modo_passo_a_passo(arquivo_config, plugins_ativos):
                     simulador.gantt_log,
                     simulador.tarefas,
                     nome_saida,
-                    simulador.nome_algoritmo_config
+                    simulador.nome_algoritmo_config,
+                    simulador.bloqueio_log,
+                    simulador.mutex_event_log 
                 )
                 print(f"Gráfico atualizado em '{nome_saida}'")
             except Exception as e:
@@ -196,22 +200,55 @@ def rodar_modo_passo_a_passo(arquivo_config, plugins_ativos):
                     t_cor = input("Cor (ex: magenta, 123456 ou FF00DD): ").strip()
                     
                     # Validação de Cor Hexadecimal
-                    # Se o usuário digitou Hex sem #, adicionamos o #
                     if re.fullmatch(r'[0-9A-Fa-f]{6}', t_cor):
                         t_cor = f"#{t_cor}"
-                    # ----------------------------------------------------------------
-
+                    
                     t_dur = int(input("Duração (ticks): "))
                     t_prio = int(input("Prioridade (inteiro): "))
                     
+                    # Parsing de Ações de Mutex
+                    t_acoes_str = input("Ações Mutex (ex: ML1:2;MU1:5) [Enter p/ vazio]: ").strip()
+                    t_acoes_parsed = []
+                    
+                    if t_acoes_str:
+                        # Separa por ponto-e-vírgula
+                        itens = [x.strip() for x in t_acoes_str.split(';') if x.strip()]
+                        for item in itens:
+                            try:
+                                tipo = item[:2].upper()
+                                resto = item[2:].split(':')
+                                mutex_id = int(resto[0])
+                                tempo = int(resto[1])
+                                
+                                if tipo not in ['ML', 'MU']:
+                                    print(f"Aviso: Ação '{item}' inválida. Ignorada.")
+                                    continue
+                                    
+                                t_acoes_parsed.append({
+                                    'tipo': tipo,
+                                    'mutex': mutex_id,
+                                    'tempo': tempo
+                                })
+                            except (ValueError, IndexError):
+                                print(f"Aviso: Formato inválido '{item}'. Use MLid:tempo (ex: ML1:2).")
+                        
+                        # Ordena por tempo (requisito de consistência)
+                        t_acoes_parsed.sort(key=lambda x: x['tempo'])
+                    # ---------------------------------------
+
                     t_ingresso = simulador.relogio_global
                     
                     # Cria e adiciona
                     nova_tcb = TCB(t_id, t_cor, t_ingresso, t_dur, t_prio)
                     
+                    # Adiciona as ações parseadas
+                    nova_tcb.acoes = t_acoes_parsed
+                    
                     # Tenta adicionar (verifica ID duplicado)
                     if simulador.adicionar_tarefa(nova_tcb):
                         print(f"\nSucesso! Tarefa {t_id} inserida no tempo {t_ingresso}.")
+                        if t_acoes_parsed:
+                            print(f"Ações agendadas: {len(t_acoes_parsed)}")
                         print("Pressione [Enter] no próximo passo para que ela seja processada.")
                     else:
                         print(f"\nErro: A tarefa '{t_id}' já existe! Inserção cancelada.")

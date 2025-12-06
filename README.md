@@ -58,7 +58,15 @@ sudo sh get-docker.sh
 
 A imagem do projeto já está compilada e hospedada no Docker Hub. Você não precisa baixar o código-fonte, apenas criar um arquivo de configuração.
 
-1. **Crie o arquivo de configuração**
+1. **Baixe a imagem do Docker Hub (opcional, mas recomendado)**
+
+   * Isso garante que você está usando a versão mais recente da imagem:
+
+     ~~~bash
+     sudo docker pull gbonatto06/so-simulator:latest
+     ~~~
+
+2. **Crie o arquivo de configuração**
 
    * Crie um arquivo chamado `config.txt` na sua pasta atual.
    * Formato:
@@ -69,7 +77,7 @@ A imagem do projeto já está compilada e hospedada no Docker Hub. Você não pr
      ...
      ~~~
 
-     > **Nota:** O campo opcional `;ALPHA` só deve ser incluído ao usar o `PRIOPEnv`.
+     > **Nota:** O campo opcional `;ALPHA` só deve ser incluído ao usar algoritmos com envelhecimento como o `PRIOPEnv`.
 
    * Exemplo (`config.txt`) utilizando o Envelhecimento:
 
@@ -79,7 +87,7 @@ A imagem do projeto já está compilada e hospedada no Docker Hub. Você não pr
      T2;blue;2;20;10
      ~~~
 
-2. **Execute o simulador**
+3. **Execute o simulador**
 
    * Abra o terminal na pasta onde você salvou o `config.txt` e rode:
 

@@ -26,8 +26,7 @@ Portabilidade Total: Execução via Docker, garantindo funcionamento em qualquer
 Pré-requisitos
 A única ferramenta necessária é o Docker.
 
-Bash
-
+Bash:
 sudo apt update
 sudo apt install docker.io -y
 
@@ -44,17 +43,15 @@ Linhas seguintes: ID;COR;TEMPO_INGRESSO;DURACAO;PRIORIDADE
 
 Exemplo (config.txt):
 
-Plaintext
-
 SRTF;3
 T1;red;0;5;2
 T2;green;1;4;5
 T3;blue;2;2;1
+
 2. Execute o Simulador
 Abra o terminal na pasta onde você salvou o config.txt e rode:
 
-Bash
-
+Bash:
 sudo docker run -it --rm -v "$(pwd)":/data gbonatto06/so-simulator
 -it: Ativa o modo interativo (para o menu).
 --rm: Remove o container ao sair (para não ocupar espaço).
@@ -77,21 +74,22 @@ n: Nova Tarefa. Permite inserir uma tarefa manualmente no meio da execução.
 
 
 Funcionalidades Avançadas
+
 1. Algoritmos Personalizados (Plugins)
+
 Você pode criar seu próprio escalonador em Python e injetá-lo no simulador sem recompilar nada.
 
 Crie uma pasta chamada extensions no seu computador.
-
 Crie um arquivo Python (ex: loteria.py) dentro dela. Sua classe deve herdar de Scheduler.
 
 Execute o Docker mapeando essa pasta também:
 
-Bash
-
+Bash:
 sudo docker run -it --rm \
   -v "$(pwd)":/data \
   -v "$(pwd)/extensions":/opt/simulator-app/extensions \
   gbonatto06/so-simulator
+  
 No menu, escolha a opção [5] Carregar Plugins.
 
 No config.txt, use o nome da sua classe (ex: LOTERIA;3).
@@ -99,30 +97,28 @@ No config.txt, use o nome da sua classe (ex: LOTERIA;3).
 2. Acesso ao Código (Desenvolvedor)
 Se você precisar inspecionar o código-fonte rodando dentro do container para fins de apresentação ou auditoria:
 
-Inicie o container com um nome fixo:
+Inicie o container com um nome fixo
 
-Bash
-
+Bash:
 sudo docker run -it --rm -v "$(pwd)":/data --name simulador-app gbonatto06/so-simulator
 Abra um segundo terminal e execute:
 
-Bash
-
+Bash:
 sudo docker exec -it simulador-app /bin/bash
-Navegue até a pasta do código:
 
-Bash
 
+Navegue até a pasta do código
+
+Bash:
 cd /opt/simulator-app
 ls -l
 
-
-Estrutura do Projeto (Para Desenvolvedores)
-Se você baixar o código-fonte, a estrutura é organizada da seguinte forma:
+Estrutura do Projeto
+A estrutura do código fonte é organizada da seguinte forma:
 
 /
 ├── main.py             # Ponto de entrada e interface CLI (Menu)
-├── Dockerfile          # Receita da imagem Docker
+├── Dockerfile          # Imagem Docker
 ├── requirements.txt    # Dependências Python (matplotlib)
 └── simulator/          # Biblioteca Core (Package)
     ├── __init__.py     # Marcador de pacote

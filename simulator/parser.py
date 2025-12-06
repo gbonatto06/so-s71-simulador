@@ -89,7 +89,6 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
             )
             
             # Parsing de acoes do mutex
-            # As ações vêm após a prioridade (índice 5 em diante)
             if len(partes) > 5:
                 acoes_cruas = partes[5:]
                 acoes_parseadas = []
@@ -97,7 +96,6 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
                     item = item.strip()
                     if not item: continue
                     
-                    # Esperado: MLxx:tt ou MUxx:tt
                     try:
                         tipo = item[:2].upper() # ML ou MU
                         resto = item[2:].split(':')
@@ -107,18 +105,26 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
                         if tipo not in ['ML', 'MU']:
                             print(f"Aviso: Ação desconhecida '{item}' na linha {i}. Ignorada.")
                             continue
-                            
+                        
+                        # Ação deve ocorrer DENTRO do tempo de vida da tarefa.
+                        # Tempo relativo começa em 0 e vai até duracao-1.
+                        # Se tempo >= duracao, a tarefa termina antes de executar a ação.
+                        if tempo >= tcb.duracao:
+                            raise ValueError(f"Tempo da ação {item} ({tempo}) excede duração da tarefa ({tcb.duracao}).")
+                        # --------------------------------------------
+
                         acoes_parseadas.append({
                             'tipo': tipo,
                             'mutex': mutex_id,
                             'tempo': tempo
                         })
-                    except (ValueError, IndexError):
+                    except (ValueError, IndexError) as e:
+                        # Repassa o erro de valor (duração excedida) para parar o carregamento
+                        # ou imprime aviso se for erro de formato.
+                        if "excede duração" in str(e):
+                            raise e 
                         print(f"Aviso: Formato inválido de ação '{item}' na linha {i}. Ignorada.")
                 
-                # Mesmos tempos -> ordem do arquivo.
-                # O sort do Python é estável, então se ordenarmos por tempo, 
-                # a ordem relativa de tempos iguais se mantém.
                 acoes_parseadas.sort(key=lambda x: x['tempo'])
                 tcb.acoes = acoes_parseadas
 

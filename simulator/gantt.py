@@ -3,16 +3,12 @@ import matplotlib.patches as mpatches
 
 def gerar_imagem_gantt(gantt_log, tarefas, nome_arquivo_saida, nome_algoritmo):
     """
-    Gera o gráfico de Gantt.
-    Agora respeita o tempo atual (não desenha futuro) e tem eixo X fixo inicial.
+    Gera o gráfico de Gantt com indicação de Sorteio.
     """
     
-    # 1. Descobrir o Tempo Atual da Simulação
     if gantt_log:
-        # Se tem logs, o tempo é o último tick registrado + 1
         tempo_atual = gantt_log[-1]['tick'] + 1
     else:
-        # Se não tem log, estamos no tempo 0
         tempo_atual = 0
 
     # --- Processar o Log (Execução) ---
@@ -21,6 +17,8 @@ def gerar_imagem_gantt(gantt_log, tarefas, nome_arquivo_saida, nome_algoritmo):
         bloco_atual = gantt_log[0].copy()
         bloco_atual['start'] = bloco_atual['tick']
         bloco_atual['duration'] = 1
+        # 'sorteio' no bloco será True se ALGUM tick do bloco teve sorteio?
+        # É mais preciso desenhar o sorteio tick a tick. Vamos tratar separadamente.
         
         for log in gantt_log[1:]:
             if log['task_id'] == bloco_atual['task_id']:
@@ -35,10 +33,8 @@ def gerar_imagem_gantt(gantt_log, tarefas, nome_arquivo_saida, nome_algoritmo):
     # --- Configurar o Gráfico ---
     fig, gnt = plt.subplots(figsize=(16, 8))
 
-    # Lista todas as tarefas no eixo Y (mesmo as futuras, para sabermos que existem)
     task_ids = sorted(list(set(t.id for t in tarefas)))
     task_ids.reverse() 
-    
     task_map = {task_id: i for i, task_id in enumerate(task_ids)}
     
     y_altura = 6 
@@ -49,41 +45,25 @@ def gerar_imagem_gantt(gantt_log, tarefas, nome_arquivo_saida, nome_algoritmo):
     gnt.set_yticklabels(task_ids)
     gnt.set_ylabel('Tarefas')
 
-    # Tamanho Mínimo do Eixo X Predefinido
-    # Usa o maior entre: Tempo Atual ou 20
     tempo_max_visual = max(tempo_atual, 20) 
-    
     gnt.set_xlim(0, tempo_max_visual)
     gnt.set_xlabel('Tempo (t)')
     
-    # Forçar intervalo de 2 em 2 nos números
     passo = 2
-        
-    # Define os números principais: 0, 2, 4, 6...
     gnt.set_xticks(range(0, tempo_max_visual + 1, passo))
-    
-    # Mantém as linhas de grade finas de 1 em 1 para precisão visual
     gnt.set_xticks(range(0, tempo_max_visual + 1, 1), minor=True)
-    
-    # A grade pontilhada segue os Minor Ticks (de 1 em 1)
     gnt.grid(True, axis='x', which='minor', linestyle=':', alpha=0.5)
     gnt.grid(True, axis='x', which='major', linestyle='-', alpha=0.8) 
     gnt.grid(False, axis='y')
 
-    # --- Desenhar a "Sombra" (Tempo de Espera) ---
+    # --- Desenhar Sombra (Espera) ---
     for t in tarefas:
         if t.id not in task_map: continue 
-
-        # Se a tarefa só vai chegar no futuro (ingresso > tempo_atual),
-        # não desenhamos nada dela ainda.
-        if t.ingresso > tempo_atual:
-            continue
+        if t.ingresso > tempo_atual: continue
 
         y_pos = task_map[t.id] * y_padding
         inicio = t.ingresso
         
-        # O fim visual da sombra é o tempo atual (se ela ainda não acabou)
-        # ou o tick de conclusão (se ela já acabou)
         if t.tick_conclusao != -1 and t.tick_conclusao <= tempo_atual:
             fim_visual = t.tick_conclusao
         else:
@@ -101,12 +81,11 @@ def gerar_imagem_gantt(gantt_log, tarefas, nome_arquivo_saida, nome_algoritmo):
                 hatch='///' 
             )
 
-    # --- Desenhar as Barras de Execução (Coloridas) ---
+    # --- Desenhar Barras de Execução ---
     for bloco in blocos_comprimidos:
         task_id = bloco['task_id']
         if task_id == 'idle': continue 
 
-        # Desenha apenas o que já aconteceu
         y_pos = task_map[task_id] * y_padding
         x_start = bloco['start']
         x_duration = bloco['duration']
@@ -119,13 +98,39 @@ def gerar_imagem_gantt(gantt_log, tarefas, nome_arquivo_saida, nome_algoritmo):
             zorder=10 
         )
 
-    # Legenda e Título
+    # --- Desenhar Indicador de Sorteio (Estrela) ---
+    # Iteramos sobre o log bruto para ser preciso no tick exato
+    if gantt_log:
+        for log in gantt_log:
+            if log.get('sorteio', False) and log['task_id'] != 'idle':
+                t_id = log['task_id']
+                if t_id in task_map:
+                    y_pos = task_map[t_id] * y_padding
+                    tick_x = log['tick']
+                    
+                    # Desenha um asterisco (*) no centro do tick, acima da barra
+                    gnt.text(
+                        tick_x + 0.5,     # Centro do tick
+                        y_pos + y_altura + 0.5, # Um pouco acima da barra
+                        "*", 
+                        ha='center', va='center', 
+                        fontsize=14, fontweight='bold', color='black',
+                        zorder=20
+                    )
+
+    # Legenda
     patches = [
         mpatches.Patch(color=t.cor, label=f"{t.id} (Prio: {t.prioridade})") 
         for t in sorted(tarefas, key=lambda x: x.id)
     ]
-    patches.append(mpatches.Patch(facecolor='lightgray', edgecolor='grey', hatch='///', label='Em Espera/Suspenso'))
+    patches.append(mpatches.Patch(facecolor='lightgray', edgecolor='grey', hatch='///', label='Em Espera'))
     
+    # Adiciona legenda para o Sorteio
+    # Criamos um "artista" fantasma para a legenda
+    legenda_sorteio = plt.Line2D([0], [0], marker='*', color='w', label='Decisão por Sorteio',
+                          markerfacecolor='black', markersize=10)
+    patches.append(legenda_sorteio)
+
     plt.legend(handles=patches, bbox_to_anchor=(1.02, 1), loc='upper left')
     plt.title(f"Gráfico de Gantt (Algoritmo: {nome_algoritmo.upper()})", fontsize=16)
 

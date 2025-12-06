@@ -1,112 +1,103 @@
+import random
 from abc import ABC, abstractmethod
 from simulator.core import TaskState
-# ABC (Abstract Base Class) nos permite criar uma interface
-# Isso garante que todo escalonador tenha o método 'decidir'
+
 class Scheduler(ABC):
     """
     Interface abstrata para todos os escalonadores.
     """
+    @property
+    def usar_quantum(self):
+        """
+        Define se este algoritmo deve respeitar o limite de Quantum.
+        Padrão: False (para FIFO, SRTF, Prioridade, etc).
+        """
+        return False
+
     @abstractmethod
     def decidir(self, fila_prontos, tarefa_atual, mudanca_contexto_obrigatoria):
-        """
-        Decide qual tarefa deve ser executada no próximo tick.
-        Retorna a TCB da tarefa escolhida ou None se a fila estiver vazia.
-        """
         pass
 
-class FIFO(Scheduler):
-    """ 
-    Escalonador First-In, First-Out (Não-preemptivo). 
-    IGNORA preempção por quantum.
+def _escolher_com_desempate(candidatos, tarefa_atual, func_metrica_primaria):
     """
+    Função Helper que aplica as regras de desempate globais.
+    """
+    if not candidatos:
+        return None, False
+
+    lista_pontuada = []
+    
+    for t in candidatos:
+        metrica = func_metrica_primaria(t)
+        nao_eh_atual = 0 if (tarefa_atual and t.id == tarefa_atual.id) else 1
+        ingresso = t.ingresso
+        duracao = t.duracao
+        fator_sorte = random.random()
+        
+        score = (metrica, nao_eh_atual, ingresso, duracao, fator_sorte)
+        lista_pontuada.append((score, t))
+    
+    lista_pontuada.sort(key=lambda x: x[0])
+    
+    vencedor = lista_pontuada[0][1]
+    score_vencedor = lista_pontuada[0][0]
+    
+    houve_sorteio = False
+    if len(lista_pontuada) > 1:
+        score_vice = lista_pontuada[1][0]
+        if score_vencedor[:-1] == score_vice[:-1]:
+            houve_sorteio = True
+            
+    return vencedor, houve_sorteio
+
+class FIFO(Scheduler):
     def decidir(self, fila_prontos, tarefa_atual, mudanca_contexto_obrigatoria):
-
-        # Se uma tarefa já está executando (e não terminou, 
-        # pois se tivesse terminado, 'tarefa_atual' seria None vindo do core.py),
-        # ela DEVE continuar. FIFO é NÃO-PREEMPTIVO.
-        if tarefa_atual:
-            return tarefa_atual
-
-        # Se a CPU está livre (tarefa_atual é None) E há tarefas na fila:
-        if fila_prontos:
-            # Encontra a tarefa que está esperando há mais tempo
-            # (maior tempo_espera == chegou primeiro na fila)
-            tarefa_escolhida = max(fila_prontos, key=lambda t: t.tempo_espera)
-            return tarefa_escolhida
-
-        # Se a fila está vazia
-        return None
-
-
+        if tarefa_atual: return tarefa_atual, False
+        if not fila_prontos: return None, False
+        return _escolher_com_desempate(fila_prontos, None, lambda t: t.ingresso)
 
 class SRTF(Scheduler):
-    """ 
-    Shortest Remaining Time First (Preemptivo). 
-    A cada tick, ele verifica se há uma tarefa com tempo restante menor.
-    """
     def decidir(self, fila_prontos, tarefa_atual, mudanca_contexto_obrigatoria):
-        # Sendo preemptivo, ele reconsidera a decisão a cada tick.
-        
-        # Lista de todos os candidatos (quem está na fila + quem está executando)
         candidatos = list(fila_prontos)
-        if tarefa_atual:
-            # Garante que a tarefa atual só é re-adicionada se não terminou
-            if tarefa_atual.estado == TaskState.EXECUTANDO:
-                candidatos.append(tarefa_atual)
-        
-        if not candidatos:
-            return None # Ninguém para executar
-            
-        # Função para calcular o tempo restante
-        def tempo_restante(t):
-            return t.duracao - t.tempo_executado
-            
-        # Ordena pelo tempo restante (o menor primeiro)
-        candidatos.sort(key=tempo_restante)
-        
-        # Retorna o que tem o menor tempo restante
-        return candidatos[0] 
+        if tarefa_atual and tarefa_atual.estado == TaskState.EXECUTANDO:
+            candidatos.append(tarefa_atual)
+        return _escolher_com_desempate(candidatos, tarefa_atual, lambda t: (t.duracao - t.tempo_executado))
 
 class PriorityPreemptive(Scheduler):
-    """ 
-    Prioridade Preemptivo. 
-    A cada tick, verifica se há alguém mais prioritário.
-    (Assumimos que número MAIOR = MAIOR prioridade)
-    """
     def decidir(self, fila_prontos, tarefa_atual, mudanca_contexto_obrigatoria):
-        
         candidatos = list(fila_prontos)
-        if tarefa_atual:
-            # Garante que a tarefa atual só é re-adicionada se não terminou
-            if tarefa_atual.estado == TaskState.EXECUTANDO:
-                candidatos.append(tarefa_atual)
+        if tarefa_atual and tarefa_atual.estado == TaskState.EXECUTANDO:
+            candidatos.append(tarefa_atual)
+        return _escolher_com_desempate(candidatos, tarefa_atual, lambda t: -t.prioridade)
 
-        if not candidatos:
-            return None # Ninguém para executar
+class PriorityAging(Scheduler):
+    def __init__(self, alpha):
+        self.alpha = int(alpha)
+
+    def decidir(self, fila_prontos, tarefa_atual, mudanca_contexto_obrigatoria):
+        candidatos = list(fila_prontos)
+        if tarefa_atual and tarefa_atual.estado == TaskState.EXECUTANDO:
+            candidatos.append(tarefa_atual)
         
-        # Ordena pela prioridade, com 'reverse=True'
-        # Assim, o número maior fica em primeiro.
-        candidatos.sort(key=lambda t: t.prioridade, reverse=True)
-        
-        # Retorna o de maior prioridade
-        return candidatos[0]
+        def calcular_metricas(t):
+            p_dinamica = t.prioridade_dinamica
+            p_estatica = t.prioridade
+            return (-p_dinamica, -p_estatica)
+
+        return _escolher_com_desempate(candidatos, tarefa_atual, calcular_metricas)
 
 class RoundRobin(Scheduler):
+    
+    @property
+    def usar_quantum(self):
+        """ Apenas o Round Robin utiliza preempção por tempo (Quantum). """
+        return True
+
     def decidir(self, fila_prontos, tarefa_atual, mudanca_contexto_obrigatoria):
-        
-        # Se não há mudança obrigatória, mantém
         if tarefa_atual and not mudanca_contexto_obrigatoria:
-            return tarefa_atual
-        
-        # Se há mudança obrigatória (quantum estourou):
-        
-        # 1. Tenta pegar o próximo da fila
-        if fila_prontos:
-            return max(fila_prontos, key=lambda t: t.tempo_espera)
-            
-        # 2. Se a fila está vazia, mas a tarefa atual ainda existe e não terminou
-        # (Isso acontece se só há 1 tarefa e o quantum estourou)
-        if tarefa_atual and tarefa_atual.estado == TaskState.EXECUTANDO:
-             return tarefa_atual # Deixa ela mesma continuar
-             
-        return None
+            return tarefa_atual, False
+        if not fila_prontos:
+            if tarefa_atual and tarefa_atual.estado == TaskState.EXECUTANDO:
+                return tarefa_atual, False
+            return None, False
+        return _escolher_com_desempate(fila_prontos, None, lambda t: t.ingresso)

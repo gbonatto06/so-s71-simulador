@@ -11,16 +11,15 @@ class TaskState(Enum):
 class TCB:
     """
     Task Control Block (TCB)
-    Armazena todas as informações de uma tarefa.
     """
     def __init__(self, id, cor, ingresso, duracao, prioridade):
-        # Parâmetros do arquivo de config que sao lidos pelo parser.py
         self.id = id
         self.cor = cor
         self.ingresso = int(ingresso)
         self.duracao = int(duracao)
-        self.prioridade = int(prioridade)
-        # Atributos de estado
+        self.prioridade = int(prioridade) # Prioridade Estática
+        self.prioridade_dinamica = int(prioridade) # Dinâmica (Aging)
+        
         self.estado = TaskState.NOVA 
         self.tempo_executado = 0
         self.tempo_espera = 0
@@ -28,17 +27,14 @@ class TCB:
         self.tick_conclusao = -1
 
     def __repr__(self):
-        """ Representação textual para debug. """
         return (
-            f"TCB(id={self.id}, estado={self.estado.name}, "
-            f"exec={self.tempo_executado}/{self.duracao}, "
-            f"prio={self.prioridade})"
+            f"TCB(id={self.id}, pd={self.prioridade_dinamica}, "
+            f"exec={self.tempo_executado}/{self.duracao})"
         )
 
     def to_debug_str(self):
-        """ Retorna string formatada para o debugger passo a passo """
         return (
-            f"  - {self.id} (Prio: {self.prioridade}):\n"
+            f"  - {self.id} (Prio Estática: {self.prioridade} | Dinâmica: {self.prioridade_dinamica}):\n"
             f"    Estado: {self.estado.name}\n"
             f"    Progresso: {self.tempo_executado} / {self.duracao}\n"
             f"    Ingresso: {self.ingresso}\n"
@@ -46,169 +42,137 @@ class TCB:
         )
 
 class Simulator:
-    """
-    Gerencia o relógio, as tarefas e o escalonador.
-    """
     def __init__(self, escalonador, quantum):
-        self.relogio_global = 0        #inicia um novo relogio global
-        self.quantum = int(quantum)    #quantum enviado pelo parser do config.txt
-        self.escalonador = escalonador    #definido o escalonador eviado pelo parser.py
-        self.nome_algoritmo_config = "Desconhecido"  #Usado para imprimir o nome do algoritmo no grafico
-        self.tarefas = []              # Lista mestre de todos os TCBs
-        self.fila_prontos = []         # Fila de tarefas PRONTAS
-        self.tarefa_executando = None  #a cpu comeca vazia
-        self.gantt_log = []            # Log para gerar o gráfico
+        self.relogio_global = 0
+        self.quantum = int(quantum)
+        self.escalonador = escalonador
+        self.nome_algoritmo_config = "Desconhecido"
+        self.tarefas = []
+        self.fila_prontos = []
+        self.tarefa_executando = None
+        self.gantt_log = []
         self.tarefas_concluidas = 0
         
-        self.historico = []  # Lista para o histórico
-        self.scheduler_called_last_tick = False # DEBUG: Flag para saber se o escalonador rodou
+        self.historico = []
+        self.scheduler_called_last_tick = False
+        self.ultimo_log = "Simulação Iniciada."
 
     def adicionar_tarefa(self, tcb):
-        # VALIDAÇÃO DE ID DUPLICADO
         for t in self.tarefas:
-            if t.id == tcb.id:
-                # Retorna False para indicar que falhou
-                return False 
-        
+            if t.id == tcb.id: return False 
         self.tarefas.append(tcb)
-        return True # Retorna True para indicar sucesso
+        return True
 
     def terminou(self):
-        """ Verifica se todas as tarefas foram concluídas """
         return self.tarefas_concluidas == len(self.tarefas)
 
     # Undo
-
     def salvar_estado(self):
-        """Salva um snapshot do estado atual."""
-        # Removemos temporariamente o histórico para não copiar recursivamente
         historico_temp = self.historico
         self.historico = [] 
-        
-        # Tiramos snapshot do objeto limpo
         snapshot = copy.deepcopy(self)
-        
-        # Devolvemos o histórico para o objeto atual e adicionamos o snapshot
         self.historico = historico_temp
         self.historico.append(snapshot)
 
     def voltar_tick(self):
-        """Restaura o estado anterior, se houver."""
-        if not self.historico:
-            return False # Não há para onde voltar
-            
-        # Recupera o último estado salvo
+        if not self.historico: return False
         ultimo_estado = self.historico.pop()
-        
-        # Guarda o histórico atual
         historico_atual = self.historico
-        
-        # Substitui os atributos do objeto atual pelos do snapshot
         self.__dict__.update(ultimo_estado.__dict__)
-        
-        # Garante que o histórico atual continua preservado
         self.historico = historico_atual
         return True
 
     # --------------------------------------------------
 
     def get_debug_info(self):
-        """ Retorna o estado atual do sistema para o debugger """
-        
-        # Informação visual sobre o Scheduler
         status_scheduler = "ATIVO" if self.scheduler_called_last_tick else "INATIVO"
-        
         header = f"--- [TICK: {self.relogio_global}] | ESCALONADOR: {status_scheduler} ---"
-        
+        log_info = f"EVENTOS DO ÚLTIMO TICK:\n >> {self.ultimo_log}"
         exec_task = self.tarefa_executando.id if self.tarefa_executando else "Nenhuma"
         exec_info = f"CPU: [ {exec_task} ]"
-        #puxa as informacoes  do simulador e imprime da lista de tarefas
-        #as que nao sao prontas
         prontos = [t.id for t in self.fila_prontos]
         fila_info = f"FILA DE PRONTOS: {prontos}"
         tasks_info = "\nESTADO DAS TAREFAS:\n" + "\n".join(
             [t.to_debug_str() for t in self.tarefas if t.estado != TaskState.NOVA]
         )
-        return "\n".join([header, exec_info, fila_info, tasks_info])
+        return "\n".join([header, log_info, exec_info, fila_info, tasks_info])
 
     def tick(self):
-        """
-        Realiza os  "tick`s" do relógio global.
-        """
-        
-        # Salvar o estado antes de mudar qualquer coisa
         self.salvar_estado() 
-        
-        # Reseta a flag de debug do scheduler para este tick
         self.scheduler_called_last_tick = False
-
-        log_eventos_tick = f"[Tick {self.relogio_global}]:"
-        
-        # Flag do escalonador, para intervir se algo mudar
+        log_eventos_tick = ""
         precisa_escalonar = False
 
-        # Verifica ingresso de novas tarefas
+        # Verifica ingresso
         for t in self.tarefas:
             if t.estado == TaskState.NOVA and t.ingresso == self.relogio_global:
                 t.estado = TaskState.PRONTA
                 self.fila_prontos.append(t)
-                log_eventos_tick += f" Tarefa {t.id} ingressou;"
-                precisa_escalonar = True # EVENTO 1: Nova tarefa pode exigir preempção
+                log_eventos_tick += f" [{t.id} Ingressou] "
+                precisa_escalonar = True 
 
-        # Atualizar tempos de espera de quem está na fila
+        # Atualizar tempos de espera e Envelhecimento
+        tem_alpha = hasattr(self.escalonador, 'alpha')
+        
         for t in self.fila_prontos:
             t.tempo_espera += 1
+            if tem_alpha:
+                t.prioridade_dinamica += self.escalonador.alpha
+                if self.tarefa_executando:
+                    if t.prioridade_dinamica > self.tarefa_executando.prioridade_dinamica:
+                        precisa_escalonar = True
+                        log_eventos_tick += f" [Aging: {t.id}({t.prioridade_dinamica}) > {self.tarefa_executando.id}({self.tarefa_executando.prioridade_dinamica})] "
 
-        # Verificar estado da tarefa atual (se ela terminou ou foi preemptada)
+        # Verificar estado da tarefa atual
         preemptar_quantum = False
         tarefa_terminou = False
         
         if self.tarefa_executando:
-            t = self.tarefa_executando    #pegamos a informacao da tarefa atual
-            
-            # Verificação de Término
+            t = self.tarefa_executando
             if t.tempo_executado == t.duracao:
-                t.estado = TaskState.TERMINADA #se verdadeiro entao ela terminou
-                t.tick_conclusao = self.relogio_global # Terminou antes deste tick
+                t.estado = TaskState.TERMINADA
+                t.tick_conclusao = self.relogio_global 
                 self.tarefas_concluidas += 1
-                log_eventos_tick += f" Tarefa {t.id} terminou;"
+                log_eventos_tick += f" [{t.id} Terminou] "
                 self.tarefa_executando = None
                 tarefa_terminou = True 
-                precisa_escalonar = True # EVENTO 2: CPU ficou livre
+                precisa_escalonar = True 
             
-            # Verificação de Quantum
-            elif t.quantum_utilizado == self.quantum:
+            # Verifica se o algoritmo usa quantum
+            elif t.quantum_utilizado == self.quantum and self.escalonador.usar_quantum:
                 preemptar_quantum = True 
-                log_eventos_tick += f" Tarefa {t.id} sofreu preempção (quantum);"
-                precisa_escalonar = True # EVENTO 3: Tempo da tarefa acabou
+                log_eventos_tick += f" [{t.id} Estourou Quantum] "
+                precisa_escalonar = True 
 
-        # Caso CPU vazia mas tem gente esperando
         elif self.fila_prontos:
-            precisa_escalonar = True # EVENTO 4: CPU Ociosa
+            precisa_escalonar = True
 
         # Decisão de Escalonamento
-        # Só chamamos o decidir se houve evento de escalonamento
+        houve_sorteio = False
         if precisa_escalonar:
-            self.scheduler_called_last_tick = True # DEBUG: Marca que rodou
+            self.scheduler_called_last_tick = True
             
-            proxima_tarefa = self.escalonador.decidir(
+            proxima_tarefa, houve_sorteio = self.escalonador.decidir(
                 self.fila_prontos, 
                 self.tarefa_executando, 
                 preemptar_quantum or tarefa_terminou 
             )
 
-            # Troca de Contexto
-            if proxima_tarefa != self.tarefa_executando:
+            # Rejuvenescimento (Aging)
+            if proxima_tarefa and tem_alpha:
+                proxima_tarefa.prioridade_dinamica = proxima_tarefa.prioridade
                 
-                # Se a tarefa antiga existe e não terminou, devolve para a fila
+            if houve_sorteio:
+                log_eventos_tick += " [SORTEIO] "
+
+            if proxima_tarefa != self.tarefa_executando:
                 t_antigo = self.tarefa_executando
                 if t_antigo and not tarefa_terminou:
                     t_antigo.estado = TaskState.PRONTA
                     t_antigo.quantum_utilizado = 0     
                     self.fila_prontos.append(t_antigo)
-                    log_eventos_tick += f" Tarefa {t_antigo.id} voltou para Prontos (preemptada);"
+                    log_eventos_tick += f" [{t_antigo.id} -> Prontos] "
                 
-                # Nova tarefa assume a CPU
                 self.tarefa_executando = proxima_tarefa
                 if self.tarefa_executando: 
                     if self.tarefa_executando in self.fila_prontos:
@@ -216,30 +180,34 @@ class Simulator:
                     
                     self.tarefa_executando.estado = TaskState.EXECUTANDO
                     self.tarefa_executando.quantum_utilizado = 0
-                    log_eventos_tick += f" Escalonador escolheu {self.tarefa_executando.id};"
+                    log_eventos_tick += f" [Escalonador escolheu {self.tarefa_executando.id}] "
         
         elif self.tarefa_executando and preemptar_quantum:
-            # Quantum estourou, precisou escalonar, mas o escalonador 
-            # decidiu manter a mesma tarefa (ex: só tem ela).
-            # Precisamos zerar o quantum mesmo assim.
              self.tarefa_executando.quantum_utilizado = 0
-             log_eventos_tick += f" Tarefa {self.tarefa_executando.id} renovou quantum (RR);"
+             log_eventos_tick += f" [{self.tarefa_executando.id} Renovou Quantum] "
 
-
-        # Executar o tick
+        # Executar
         if self.tarefa_executando:
             t = self.tarefa_executando
             t.tempo_executado += 1
             t.quantum_utilizado += 1 
             
-            # Adiciona ao log do Gantt 
-            self.gantt_log.append({'tick': self.relogio_global, 'task_id': t.id, 'cor': t.cor})
-            log_eventos_tick += f" Tarefa {t.id} executou;" 
+            self.gantt_log.append({
+                'tick': self.relogio_global, 
+                'task_id': t.id, 
+                'cor': t.cor,
+                'sorteio': houve_sorteio
+            })
+            log_eventos_tick += f" [{t.id} Executou] " 
         else:
-            # CPU ociosa
-            self.gantt_log.append({'tick': self.relogio_global, 'task_id': 'idle', 'cor': '#FFFFFF'})
-            log_eventos_tick += " CPU ociosa;"
+            self.gantt_log.append({
+                'tick': self.relogio_global, 
+                'task_id': 'idle', 
+                'cor': '#FFFFFF',
+                'sorteio': False
+            })
+            log_eventos_tick += " [CPU Ociosa] "
 
-        # Avançar o relógio global
         self.relogio_global += 1
+        self.ultimo_log = log_eventos_tick
         return log_eventos_tick

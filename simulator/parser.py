@@ -4,26 +4,21 @@ import importlib.util
 import inspect
 import re
 from simulator.core import Simulator, TCB
-from simulator.schedulers import FIFO, SRTF, PriorityPreemptive, RoundRobin, Scheduler
+from simulator.schedulers import FIFO, SRTF, PriorityPreemptive, PriorityAging, RoundRobin, Scheduler
 
 def _normalizar_cor(cor_str):
     """
     Verifica se a cor está no formato Hexadecimal sem '#'
     Se estiver sem, adiciona o '#' para o Matplotlib entender.
-    Se for uma cor nomeada (ex: "red") ou já tiver '#', mantém como está.
     """
     cor_limpa = cor_str.strip()
-    
-    # Regex para verificar se são exatamente 6 caracteres hexadecimais (0-9, A-F)
     if re.fullmatch(r'[0-9A-Fa-f]{6}', cor_limpa):
         return f"#{cor_limpa}"
-    
     return cor_limpa
 
 def carregar_plugins(diretorio_plugins="extensions"):
     """
     Varre o diretório e RETORNA os plugins encontrados.
-    Não afeta o sistema globalmente, apenas retorna o dicionário.
     """
     plugins = {}
     
@@ -31,7 +26,6 @@ def carregar_plugins(diretorio_plugins="extensions"):
         print(f"Aviso: Diretório '{diretorio_plugins}' não encontrado.")
         return plugins
 
-    # Adiciona ao path apenas se ainda não estiver
     abs_path = os.path.abspath(diretorio_plugins)
     if abs_path not in sys.path:
         sys.path.append(abs_path)
@@ -59,17 +53,23 @@ def carregar_plugins(diretorio_plugins="extensions"):
     print("-----------------------------------------------")
     return plugins
 
-def obter_escalonador(algoritmo_nome, quantum, plugins_externos=None):
+def obter_escalonador(algoritmo_nome, quantum, alpha=0, plugins_externos=None):
     """
     Decide qual classe instanciar. 
-    Agora aceita um dicionário opcional de plugins_externos.
+    Agora aceita 'alpha' para escalonadores com envelhecimento.
     """
     algoritmo_upper = algoritmo_nome.upper()
     
-    # 1. Verifica nos PLUGINS PASSADOS (Se houver)
+    # 1. Verifica nos PLUGINS PASSADOS
     if plugins_externos and algoritmo_upper in plugins_externos:
         print(f"Usando escalonador via Plugin: {algoritmo_upper}")
-        return plugins_externos[algoritmo_upper]()
+        cls = plugins_externos[algoritmo_upper]
+        
+        # Tenta instanciar passando 'alpha'. Se o plugin não aceitar args, tenta sem.
+        try:
+            return cls(alpha)
+        except TypeError:
+            return cls()
 
     # 2. Verifica NATIVOS
     if algoritmo_upper == 'FIFO':
@@ -83,6 +83,10 @@ def obter_escalonador(algoritmo_nome, quantum, plugins_externos=None):
 
     elif algoritmo_upper == 'PRIORIDADEP': 
         return PriorityPreemptive()
+    
+    # Prioridade com Envelhecimento
+    elif algoritmo_upper == 'PRIOPENV':
+        return PriorityAging(alpha)
 
     elif algoritmo_upper in ['RR', 'ROUNDROBIN']:
         return RoundRobin()
@@ -93,7 +97,7 @@ def obter_escalonador(algoritmo_nome, quantum, plugins_externos=None):
 def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
     """
     Lê o arquivo de configuração.
-    Agora aceita o argumento 'plugins_externos' para passar para o factory.
+    Lê ALGORITMO, QUANTUM e o opcional ALPHA.
     """
     try:
         with open(caminho_arquivo, 'r') as f:
@@ -102,31 +106,42 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
         if len(linhas) < 2:
             raise ValueError("Arquivo de configuração deve ter pelo menos 2 linhas.")
             
-        # Linha 1: Configurações do Sistema
+        # Linha 1: Configurações do Sistema (ALGO;QUANTUM;ALPHA)
         linha_sistema = linhas[0].split(';')
         if len(linha_sistema) < 2:
-            raise ValueError("Linha de sistema mal formatada.")
+            raise ValueError("Linha de sistema mal formatada (Requer: ALGO;QUANTUM).")
             
         algoritmo_nome = linha_sistema[0].strip()
         
-        # Conversão segura de quantum
         try:
             quantum = int(linha_sistema[1].strip())
         except ValueError:
             raise ValueError(f"Quantum inválido: {linha_sistema[1]}")
+            
+        # Leitura do Alpha (Opcional, padrão 0)
+        alpha = 0
+        if len(linha_sistema) >= 3:
+            try:
+                alpha = int(linha_sistema[2].strip())
+            except ValueError:
+                print(f"Aviso: Alpha '{linha_sistema[2]}' inválido. Usando 0.")
+                alpha = 0
         
-        # Busca o escalonador
-        escalonador = obter_escalonador(algoritmo_nome, quantum, plugins_externos)
+        # Busca o escalonador passando o alpha
+        escalonador = obter_escalonador(algoritmo_nome, quantum, alpha, plugins_externos)
         
         if escalonador is None:
             msg = f"Algoritmo '{algoritmo_nome}' não encontrado."
             if not plugins_externos:
-                msg += " (Nenhum plugin foi carregado. Use a opção de carregar plugins no menu se este for um algoritmo externo)."
+                msg += " (Plugins não carregados)."
             raise ValueError(msg)
         
         # Inicializa o Simulador
         simulador = Simulator(escalonador, quantum)
         simulador.nome_algoritmo_config = algoritmo_nome
+        # Se for o algoritmo novo, adiciona info do alpha no nome para o gráfico
+        if algoritmo_nome.upper() == 'PRIOPENV':
+             simulador.nome_algoritmo_config += f" (Alpha={alpha})"
 
         # Linhas 2..N: Tarefas
         for i, linha in enumerate(linhas[1:], start=2):
@@ -134,24 +149,21 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
             if len(partes) < 5:
                 raise ValueError(f"Linha {i} mal formatada.")
             
-            # Tratamento da COR
             cor_processada = _normalizar_cor(partes[1])
 
-            # Criação do TCB com conversão de tipos
-            # Isso é crucial para que o algoritmo consiga somar/subtrair tempos
             try:
                 tcb = TCB(
                     id=partes[0].strip(),
-                    cor=cor_processada,       # Cor normalizada, aceita com # e sem
-                    ingresso=int(partes[2]),  # Int
-                    duracao=int(partes[3]),   # Int
-                    prioridade=int(partes[4]) # Int
+                    cor=cor_processada,       
+                    ingresso=int(partes[2]),  
+                    duracao=int(partes[3]),   
+                    prioridade=int(partes[4]) 
                 )
                 simulador.adicionar_tarefa(tcb)
             except ValueError as ve:
                 raise ValueError(f"Erro de conversão numérica na linha {i}: {ve}")
             
-        print(f"Sistema carregado: {algoritmo_nome}, Quantum={quantum}, Tarefas={len(simulador.tarefas)}")
+        print(f"Sistema carregado: {algoritmo_nome}, Quantum={quantum}, Alpha={alpha}, Tarefas={len(simulador.tarefas)}")
         return simulador
         
     except FileNotFoundError:

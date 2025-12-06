@@ -10,12 +10,12 @@ Este projeto implementa um **simulador visual de um sistema operacional multitar
 
 ## Índice
 
-* [Funcionalidades](#-funcionalidades)
-* [Pré-requisitos](#-pré-requisitos)
-* [Como Rodar (Guia Rápido)](#-como-rodar-guia-rápido)
-* [Menu Interativo](#-menu-interativo)
-* [Funcionalidades Avançadas](#-funcionalidades-avançadas)
-* [Estrutura do Projeto](#-estrutura-do-projeto)
+* [Funcionalidades](#funcionalidades)
+* [Pré-requisitos](#pré-requisitos)
+* [Como Rodar (Guia Rápido)](#como-rodar-guia-rápido)
+* [Menu Interativo](#menu-interativo)
+* [Funcionalidades Avançadas](#funcionalidades-avançadas)
+* [Estrutura do Projeto](#estrutura-do-projeto)
 
 ---
 
@@ -27,6 +27,7 @@ Este projeto implementa um **simulador visual de um sistema operacional multitar
 * **Round Robin (RR):** Ativado automaticamente ao selecionar FIFO com `Quantum > 0`.
 * **SRTF (Shortest Remaining Time First):** Preemptivo.
 * **Prioridade Preemptivo (PRIORIDADEP):** Preemptivo (Maior número = Maior prioridade).
+* **Prioridade com Envelhecimento (PRIOPEnv):** Preemptivo. Utiliza o parâmetro **Alpha** para prevenir inanição (_starvation_).
 * **Plugins Externos:** Capacidade de carregar algoritmos personalizados via Python sem recompilar.
 
 ### Visualização e Interatividade
@@ -63,18 +64,19 @@ A imagem do projeto já está compilada e hospedada no Docker Hub. Você não pr
    * Formato:
 
      ~~~plaintext
-     ALGORITMO;QUANTUM
+     ALGORITMO;QUANTUM[;ALPHA]
      ID;COR;TEMPO_INGRESSO;DURACAO;PRIORIDADE
      ...
      ~~~
 
-   * Exemplo (`config.txt`):
+     > **Nota:** O campo opcional `;ALPHA` só deve ser incluído ao usar o `PRIOPEnv`.
+
+   * Exemplo (`config.txt`) utilizando o Envelhecimento:
 
      ~~~plaintext
-     SRTF;3
-     T1;red;0;5;2
-     T2;green;1;4;5
-     T3;blue;2;2;1
+     PRIOPEnv;2;2
+     T1;red;0;20;1
+     T2;blue;2;20;10
      ~~~
 
 2. **Execute o simulador**

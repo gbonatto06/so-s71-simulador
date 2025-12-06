@@ -63,7 +63,14 @@ class Simulator:
         self.historico = []  # Lista para o histórico
 
     def adicionar_tarefa(self, tcb):
-        self.tarefas.append(tcb)     #adiciona a tarefa na lista de tarefas do sim.
+        # VALIDAÇÃO DE ID DUPLICADO
+        for t in self.tarefas:
+            if t.id == tcb.id:
+                # Retorna False para indicar que falhou
+                return False 
+        
+        self.tarefas.append(tcb)
+        return True # Retorna True para indicar sucesso
 
     def terminou(self):
         """ Verifica se todas as tarefas foram concluídas """

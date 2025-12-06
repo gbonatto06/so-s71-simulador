@@ -16,6 +16,10 @@ WORKDIR /opt/simulator-app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+#Cria a pasta de extensoes vazia
+RUN mkdir -p extensions
+
+
 # Copia todo o código da nossa aplicação para dentro do container
 COPY . .
 #diretorio dos usuarios

@@ -90,3 +90,23 @@ class PriorityPreemptive(Scheduler):
         
         # Retorna o de maior prioridade
         return candidatos[0]
+
+class RoundRobin(Scheduler):
+    def decidir(self, fila_prontos, tarefa_atual, mudanca_contexto_obrigatoria):
+        
+        # Se não há mudança obrigatória, mantém
+        if tarefa_atual and not mudanca_contexto_obrigatoria:
+            return tarefa_atual
+        
+        # Se há mudança obrigatória (quantum estourou):
+        
+        # 1. Tenta pegar o próximo da fila
+        if fila_prontos:
+            return max(fila_prontos, key=lambda t: t.tempo_espera)
+            
+        # 2. Se a fila está vazia, mas a tarefa atual ainda existe e não terminou
+        # (Isso acontece se só há 1 tarefa e o quantum estourou)
+        if tarefa_atual and tarefa_atual.estado == TaskState.EXECUTANDO:
+             return tarefa_atual # Deixa ela mesma continuar
+             
+        return None

@@ -5,7 +5,7 @@ FROM python:3.11-slim
 # Instala dependências do sistema para o Matplotlib (backend 'Agg' para PNG)
 # Isso é crucial para o Matplotlib rodar sem uma interface gráfica (X Server)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3-tk \
+    python3-tk nano \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 #Define o diretorio para o codigo fonte

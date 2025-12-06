@@ -1,122 +1,169 @@
-Simulador de Escalonador de Processos (SO)
-Universidade Tecnológica Federal do Paraná (UTFPR) - Câmpus Curitiba > Curso: Sistemas de Informação > Disciplina: Sistemas Operacionais
+# Simulador de Escalonador de Processos
 
-Este projeto implementa um simulador visual de um sistema operacional multitarefa. Ele permite visualizar o comportamento de diferentes algoritmos de escalonamento, gerando gráficos de Gantt e oferecendo modos de execução passo-a-passo com recursos avançados de depuração.
+> **Universidade Tecnológica Federal do Paraná (UTFPR) - Câmpus Curitiba**  
+> **Curso:** Sistemas de Informação  
+> **Disciplina:** Sistemas Operacionais
 
-Funcionalidades
-Algoritmos Suportados:
+Este projeto implementa um **simulador visual de um sistema operacional multitarefa**. Ele permite visualizar o comportamento de diferentes algoritmos de escalonamento, gerando gráficos de Gantt automaticamente e oferecendo modos de execução passo-a-passo com recursos avançados de depuração e "viagem no tempo" (undo).
 
-FIFO (First-In, First-Out): Não-preemptivo.
-Round Robin (RR): Ativado automaticamente ao selecionar FIFO com Quantum > 0.
-SRTF (Shortest Remaining Time First): Preemptivo.
-Prioridade Preemptivo (PRIORIDADEP): Preemptivo (Maior número = Maior prioridade).
-Plugins Externos: Capacidade de carregar algoritmos personalizados via Python.
-Visualização: Gera gráficos de Gantt em PNG automaticamente, diferenciando tempo de execução (cor) e tempo de espera (cinza/sombra).
+---
 
-Modo Passo-a-Passo Interativo:
+## Índice
 
-Visualização do estado da CPU e Filas a cada tick.
-Time Travel (Undo): Permite voltar no tempo para desfazer ações.
-Inserção Dinâmica: Permite adicionar novas tarefas durante a execução.
-Geração de gráfico em tempo real a cada passo.
-Portabilidade Total: Execução via Docker, garantindo funcionamento em qualquer máquina Linux sem instalação de dependências.
+* [Funcionalidades](#-funcionalidades)
+* [Pré-requisitos](#-pré-requisitos)
+* [Como Rodar (Guia Rápido)](#-como-rodar-guia-rápido)
+* [Menu Interativo](#-menu-interativo)
+* [Funcionalidades Avançadas](#-funcionalidades-avançadas)
+* [Estrutura do Projeto](#-estrutura-do-projeto)
 
-Pré-requisitos
-A única ferramenta necessária é o Docker.
+---
 
-Bash:
+## Funcionalidades
+
+### Algoritmos Suportados
+
+* **FIFO (First-In, First-Out):** Não-preemptivo.
+* **Round Robin (RR):** Ativado automaticamente ao selecionar FIFO com `Quantum > 0`.
+* **SRTF (Shortest Remaining Time First):** Preemptivo.
+* **Prioridade Preemptivo (PRIORIDADEP):** Preemptivo (Maior número = Maior prioridade).
+* **Plugins Externos:** Capacidade de carregar algoritmos personalizados via Python sem recompilar.
+
+### Visualização e Interatividade
+
+* **Geração de Gráficos:** Gera arquivos PNG do Gráfico de Gantt, diferenciando tempo de execução (cor) e tempo de espera (sombra cinza).
+* **Modo Debugger (Passo-a-Passo):**
+  * Visualização do estado da CPU e Filas a cada *tick*.
+  * **Time Travel (Undo):** Permite voltar no tempo para desfazer ações (`v`).
+  * **Inserção Dinâmica:** Permite adicionar novas tarefas durante a execução (`n`).
+  * Atualização do gráfico em tempo real.
+* **Portabilidade Total:** Execução via Docker, garantindo funcionamento em qualquer máquina Linux.
+
+---
+
+## Pré-requisitos
+
+A única ferramenta necessária é o **Docker**.
+
+~~~bash
 sudo apt update
 sudo apt install docker.io -y
+~~~
 
-Como Rodar (Guia Rápido)
+---
+
+## Como Rodar (Guia Rápido)
+
 A imagem do projeto já está compilada e hospedada no Docker Hub. Você não precisa baixar o código-fonte, apenas criar um arquivo de configuração.
 
-1. Crie o arquivo de configuração
-Crie um arquivo chamado config.txt na sua pasta atual.
+1. **Crie o arquivo de configuração**
 
-Formato:
+   * Crie um arquivo chamado `config.txt` na sua pasta atual.
+   * Formato:
 
-Linha 1: ALGORITMO;QUANTUM
-Linhas seguintes: ID;COR;TEMPO_INGRESSO;DURACAO;PRIORIDADE
+     ~~~plaintext
+     ALGORITMO;QUANTUM
+     ID;COR;TEMPO_INGRESSO;DURACAO;PRIORIDADE
+     ...
+     ~~~
 
-Exemplo (config.txt):
+   * Exemplo (`config.txt`):
 
-SRTF;3
-T1;red;0;5;2
-T2;green;1;4;5
-T3;blue;2;2;1
+     ~~~plaintext
+     SRTF;3
+     T1;red;0;5;2
+     T2;green;1;4;5
+     T3;blue;2;2;1
+     ~~~
 
-2. Execute o Simulador
-Abra o terminal na pasta onde você salvou o config.txt e rode:
+2. **Execute o simulador**
 
-Bash:
-sudo docker run -it --rm -v "$(pwd)":/data gbonatto06/so-simulator
--it: Ativa o modo interativo (para o menu).
---rm: Remove o container ao sair (para não ocupar espaço).
--v "$(pwd)":/data: Mapeia sua pasta atual (host) para a pasta de dados do container. É assim que ele lê seu config.txt e salva o gráfico gantt.png no seu computador.
+   * Abra o terminal na pasta onde você salvou o `config.txt` e rode:
 
+     ~~~bash
+     sudo docker run -it --rm -v "$(pwd)":/data gbonatto06/so-simulator
+     ~~~
 
-O Menu Interativo
-Ao iniciar, você verá as seguintes opções:
+   * Entendendo o comando:
+     * `-it`: Ativa o modo interativo (necessário para ver o menu).
+     * `--rm`: Remove o container automaticamente ao sair (economiza espaço).
+     * `-v "$(pwd)":/data`: **Crucial.** Mapeia sua pasta atual (host) para a pasta de dados do container.  
+       É assim que o simulador lê seu `config.txt` e salva o gráfico `gantt.png` no seu computador.
 
-[1] Carregar Arquivo: Digite o nome do seu arquivo (ex: config.txt).
-[2] Executar (Modo Completo): Roda a simulação inteira e gera o gráfico final.
-[3] Executar (Modo Passo-a-Passo): O modo "Debugger".
+---
 
-Enter: Avança um tick no tempo no modo passo a passo.
-v: Volta um tick (Desfazer/Undo).
-n: Nova Tarefa. Permite inserir uma tarefa manualmente no meio da execução.
+## Menu Interativo
 
-[4] Editar Arquivo: Abre o editor nano dentro do container para você ajustar o config.txt sem precisar sair.
-[5] Carregar Plugins: (Veja seção Avançada abaixo).
+Ao iniciar, você verá as seguintes opções no terminal:
 
+* `[1] Carregar Arquivo`: Digite o nome do seu arquivo (ex: `config.txt`).
+* `[2] Executar (Modo Completo)`: Roda a simulação inteira e gera o gráfico final.
+* `[3] Executar (Modo Passo-a-Passo)`: Entra no modo *Debugger*.
+* `[4] Editar Arquivo`: Abre o editor `nano` dentro do container para ajustar o `config.txt` sem sair.
+* `[5] Carregar Plugins`: Carrega algoritmos externos (veja abaixo).
 
-Funcionalidades Avançadas
+### Comandos do Modo Passo-a-Passo
 
-1. Algoritmos Personalizados (Plugins)
+* `Enter`: Avança um *tick* no tempo.
+* `v`: Volta um *tick* (Desfazer / Undo).
+* `n`: Nova Tarefa. Permite inserir uma tarefa manualmente no meio da execução.
+* `s`: Sair do modo passo-a-passo.
 
-Você pode criar seu próprio escalonador em Python e injetá-lo no simulador sem recompilar nada.
+---
 
-Crie uma pasta chamada extensions no seu computador.
-Crie um arquivo Python (ex: loteria.py) dentro dela. Sua classe deve herdar de Scheduler.
+## Funcionalidades Avançadas
 
-Execute o Docker mapeando essa pasta também:
+### 1. Algoritmos Personalizados (Plugins)
 
-Bash:
-sudo docker run -it --rm \
-  -v "$(pwd)":/data \
-  -v "$(pwd)/extensions":/opt/simulator-app/extensions \
-  gbonatto06/so-simulator
-  
-No menu, escolha a opção [5] Carregar Plugins.
+Você pode injetar seu próprio escalonador escrito em Python sem recompilar a imagem.
 
-No config.txt, use o nome da sua classe (ex: LOTERIA;3).
+1. Crie uma pasta chamada `extensions` no seu computador.
+2. Crie um arquivo Python (ex: `loteria.py`) dentro dela.  
+   *Sua classe deve herdar de `Scheduler`.*
+3. Execute o Docker mapeando essa pasta extra:
 
-2. Acesso ao Código (Desenvolvedor)
-Se você precisar inspecionar o código-fonte rodando dentro do container para fins de apresentação ou auditoria:
+   ~~~bash
+   sudo docker run -it --rm \
+     -v "$(pwd)":/data \
+     -v "$(pwd)/extensions":/opt/simulator-app/extensions \
+     gbonatto06/so-simulator
+   ~~~
 
-Inicie o container com um nome fixo
+4. No menu, escolha a opção `[5] Carregar Plugins`.
+5. No `config.txt`, use o nome da sua classe (ex: `LOTERIA;3`).
 
-Bash:
-sudo docker run -it --rm -v "$(pwd)":/data --name simulador-app gbonatto06/so-simulator
-Abra um segundo terminal e execute:
+### 2. Acesso ao Código (Desenvolvedor)
 
-Bash:
-sudo docker exec -it simulador-app /bin/bash
+Para inspecionar o código-fonte rodando dentro do container:
 
+1. Inicie o container com um nome fixo:
 
-Navegue até a pasta do código
+   ~~~bash
+   sudo docker run -it --rm -v "$(pwd)":/data --name simulador-app gbonatto06/so-simulator
+   ~~~
 
-Bash:
-cd /opt/simulator-app
-ls -l
+2. Abra um segundo terminal e execute:
 
-Estrutura do Projeto
-A estrutura do código fonte é organizada da seguinte forma:
+   ~~~bash
+   sudo docker exec -it simulador-app /bin/bash
+   ~~~
 
-/
+3. Navegue até a pasta do código:
+
+   ~~~bash
+   cd /opt/simulator-app
+   ls -l
+   ~~~
+
+---
+
+## Estrutura do Projeto
+
+Se você baixar o código-fonte, esta é a organização:
+
+~~~plaintext
 ├── main.py             # Ponto de entrada e interface CLI (Menu)
-├── Dockerfile          # Imagem Docker
+├── Dockerfile          # Receita da imagem Docker
 ├── requirements.txt    # Dependências Python (matplotlib)
 └── simulator/          # Biblioteca Core (Package)
     ├── __init__.py     # Marcador de pacote
@@ -124,3 +171,4 @@ A estrutura do código fonte é organizada da seguinte forma:
     ├── schedulers.py   # Implementação dos algoritmos nativos
     ├── parser.py       # Leitor de config e carregador de plugins
     └── gantt.py        # Gerador de gráficos (Matplotlib)
+~~~

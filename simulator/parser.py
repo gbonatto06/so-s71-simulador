@@ -3,13 +3,22 @@ import sys
 import importlib.util
 import inspect
 import re
+import matplotlib.colors as mcolors
 from simulator.core import Simulator, TCB
 from simulator.schedulers import FIFO, SRTF, PriorityPreemptive, PriorityAging, RoundRobin, Scheduler
 
 def _normalizar_cor(cor_str):
     cor_limpa = cor_str.strip()
+    
+    # 1. Se for Hexadecimal sem '#', adiciona
     if re.fullmatch(r'[0-9A-Fa-f]{6}', cor_limpa):
-        return f"#{cor_limpa}"
+        cor_limpa = f"#{cor_limpa}"
+    
+    # 2. Validação, o Matplotlib consegue desenhar isso?
+    # Isso barra "azul", "vermelho", strings aleatórias, etc.
+    if not mcolors.is_color_like(cor_limpa):
+        raise ValueError(f"Cor '{cor_str}' inválida. Use HEX (#RRGGBB) ou nomes em Inglês (red, blue, etc).")
+        
     return cor_limpa
 
 def carregar_plugins(diretorio_plugins="extensions"):
@@ -80,6 +89,8 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
             partes = linha.strip().split(';')
             if len(partes) < 5: raise ValueError(f"Linha {i} mal formatada.")
             
+            # O _normalizar_cor agora lança exceção se a cor for inválida
+            # Isso será capturado pelo 'except Exception as e' abaixo
             tcb = TCB(
                 partes[0].strip(), 
                 _normalizar_cor(partes[1]), 

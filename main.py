@@ -43,7 +43,7 @@ def exibir_debugger(simulador):
 def pausar_e_continuar():
     input("\nPressione Enter para voltar ao menu principal...")
 
-# Funções de Lógica
+# --- Funções de Lógica ---
 
 def carregar_novo_arquivo(plugins_ativos):
     arquivo = input("Digite o caminho do arquivo (ex: config.txt): ").strip()
@@ -183,7 +183,7 @@ def rodar_modo_passo_a_passo(arquivo_config, plugins_ativos):
                     t_id = input("ID da Tarefa (ex: T_Extra): ").strip()
                     
                     # VALIDAÇÃO DE COR
-                    t_cor = input("Cor (ex: red/cyan ou FF3300): ").strip()
+                    t_cor = input("Cor (ex: red/cyan ou 123456): ").strip()
                     # 1. Normaliza Hex se necessário
                     if re.fullmatch(r'[0-9A-Fa-f]{6}', t_cor): 
                         t_cor = f"#{t_cor}"
@@ -243,6 +243,60 @@ def rodar_modo_passo_a_passo(arquivo_config, plugins_ativos):
     except KeyboardInterrupt:
         print("\nRetornando ao menu.")
         return
+
+# --- Loop Principal ---
+
+def main():
+    arquivo_carregado = None
+    plugins_carregados = {} 
+    
+    while True:
+        exibir_menu(arquivo_carregado, len(plugins_carregados))
+        escolha = input("Escolha uma opção [1-6]: ").strip()
+        
+        if escolha == '1':
+            novo = carregar_novo_arquivo(plugins_carregados)
+            if novo: arquivo_carregado = novo
+            pausar_e_continuar()
+            
+        elif escolha == '2':
+            if arquivo_carregado is None:
+                print("\nErro: Nenhum arquivo carregado.")
+            else:
+                rodar_modo_completo(arquivo_carregado, plugins_carregados)
+            pausar_e_continuar()
+
+        elif escolha == '3':
+            if arquivo_carregado is None:
+                print("\nErro: Nenhum arquivo carregado.")
+            else:
+                rodar_modo_passo_a_passo(arquivo_carregado, plugins_carregados)
+            pausar_e_continuar()
+
+        elif escolha == '4':
+            print("\nAbrindo editor...")
+            time.sleep(1)
+            novo = editar_arquivo_config(arquivo_carregado, plugins_carregados)
+            if novo: arquivo_carregado = novo
+            pausar_e_continuar()
+
+        elif escolha == '5':
+            print("\nCarregando plugins da pasta /extensions...")
+            novos_plugins = carregar_plugins()
+            if novos_plugins:
+                plugins_carregados.update(novos_plugins)
+                print(f"\nSucesso! {len(novos_plugins)} plugins carregados/atualizados.")
+            else:
+                print("\nNenhum plugin válido encontrado na pasta 'extensions'.")
+            pausar_e_continuar()
+
+        elif escolha == '6':
+            print("Saindo do simulador.")
+            break
+            
+        else:
+            print(f"\nOpção '{escolha}' inválida.")
+            pausar_e_continuar()
 
 if __name__ == "__main__":
     main()

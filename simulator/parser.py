@@ -88,7 +88,7 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
                 int(partes[4])
             )
             
-            # Parsing de acoes do mutex
+            # Parsing de acoes (Mutex e IO)
             if len(partes) > 5:
                 acoes_cruas = partes[5:]
                 acoes_parseadas = []
@@ -97,35 +97,61 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
                     if not item: continue
                     
                     try:
-                        tipo = item[:2].upper() # ML ou MU
-                        resto = item[2:].split(':')
-                        mutex_id = int(resto[0])
-                        tempo = int(resto[1])
-                        
-                        if tipo not in ['ML', 'MU']:
-                            print(f"Aviso: Ação desconhecida '{item}' na linha {i}. Ignorada.")
-                            continue
-                        
-                        # Ação deve ocorrer DENTRO do tempo de vida da tarefa.
-                        # Tempo relativo começa em 0 e vai até duracao-1.
-                        # Se tempo >= duracao, a tarefa termina antes de executar a ação.
-                        if tempo >= tcb.duracao:
-                            raise ValueError(f"Tempo da ação {item} ({tempo}) excede duração da tarefa ({tcb.duracao}).")
-                        # --------------------------------------------
+                        # Verifica se é I/O
+                        if item.startswith("IO:"):
+                            # Formato IO:xx-yy
+                            resto = item[3:].split('-') # xx, yy
+                            inicio_io = int(resto[0])
+                            duracao_io = int(resto[1])
+                            
+                            # Validação de tempo e Duração Mínima
+                            if inicio_io >= tcb.duracao:
+                                raise ValueError(f"Tempo da E/S {item} ({inicio_io}) excede duração da tarefa.")
+                            
+                            if duracao_io < 1:
+                                raise ValueError(f"Duração da E/S {item} deve ser no mínimo 1 (Req 3.4).")
 
-                        acoes_parseadas.append({
-                            'tipo': tipo,
-                            'mutex': mutex_id,
-                            'tempo': tempo
-                        })
+                            acoes_parseadas.append({
+                                'tipo': 'IO',
+                                'tempo': inicio_io,
+                                'duracao_io': duracao_io,
+                                'ordem_original': len(acoes_parseadas) # Auxiliar para estabilidade (Req 3.5)
+                            })
+
+                        else:
+                            # Processamento padrão Mutex (ML/MU)
+                            tipo = item[:2].upper() 
+                            resto = item[2:].split(':')
+                            mutex_id = int(resto[0])
+                            tempo = int(resto[1])
+                            
+                            if tipo not in ['ML', 'MU']:
+                                print(f"Aviso: Ação desconhecida '{item}' na linha {i}. Ignorada.")
+                                continue
+                            
+                            if tempo >= tcb.duracao:
+                                raise ValueError(f"Tempo da ação {item} ({tempo}) excede duração da tarefa.")
+
+                            acoes_parseadas.append({
+                                'tipo': tipo,
+                                'mutex': mutex_id,
+                                'tempo': tempo,
+                                'ordem_original': len(acoes_parseadas) # Auxiliar para estabilidade
+                            })
+
                     except (ValueError, IndexError) as e:
-                        # Repassa o erro de valor (duração excedida) para parar o carregamento
-                        # ou imprime aviso se for erro de formato.
-                        if "excede duração" in str(e):
+                        if "excede duração" in str(e) or "Req 3.4" in str(e):
                             raise e 
                         print(f"Aviso: Formato inválido de ação '{item}' na linha {i}. Ignorada.")
                 
-                acoes_parseadas.sort(key=lambda x: x['tempo'])
+                # Ordenação estável.
+                # Primeiro por tempo, depois pela ordem original de aparição na linha.
+                acoes_parseadas.sort(key=lambda x: (x['tempo'], x['ordem_original']))
+                
+                # Removemos a chave auxiliar para não sujar o objeto TCB
+                for acao in acoes_parseadas:
+                    del acao['ordem_original']
+
                 tcb.acoes = acoes_parseadas
 
             simulador.adicionar_tarefa(tcb)

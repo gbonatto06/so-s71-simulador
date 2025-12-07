@@ -1,4 +1,5 @@
-PRIORIDADEP;2
-LOW;blue;0;10;2;ML1:2;MU1:7
-HIGH;red;4;5;10;ML1:1;MU1:3
-MEDIUM;green;6;10;5
+ROUNDROBIN; 4
+T_Ordem_Correta; #3498db; 0; 8; 1; ML1:1; IO:1-10; MU1:4
+T_Ordem_Inversa; #2ecc71; 0; 8; 1; IO:1-10; ML2:1; MU2:4
+T_Juiz_M1;       #e74c3c; 5; 3; 1; ML1:0
+T_Juiz_M2;       #9b59b6; 5; 3; 1; ML2:0

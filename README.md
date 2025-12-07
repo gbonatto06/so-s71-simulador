@@ -45,7 +45,7 @@ Este projeto implementa um **simulador visual de um sistema operacional multitar
 * **Modo Debugger (Passo-a-Passo):**
   * Visualização do estado da CPU, Filas e Tarefas Bloqueadas a cada *tick*.
   * **Time Travel (Undo):** Permite voltar no tempo para desfazer ações (`v`).
-  * **Inserção Dinâmica:** Permite adicionar novas tarefas (com ações de E/S) durante a execução (`n`).
+  * **Inserção Dinâmica:** Permite adicionar novas tarefas (com ações de Mutex ou E/S) durante a execução (`n`).
   * Atualização do gráfico em tempo real.
 * **Portabilidade Total:** Execução via Docker, garantindo funcionamento em qualquer máquina Linux.
 

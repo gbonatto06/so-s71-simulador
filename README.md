@@ -1,10 +1,9 @@
 # Simulador de Escalonador de Processos
 
-> **Universidade Tecnológica Federal do Paraná (UTFPR) - Câmpus Curitiba**  
-> **Curso:** Sistemas de Informação  
+> **Universidade Tecnológica Federal do Paraná (UTFPR) - Câmpus Curitiba** > **Curso:** Sistemas de Informação  
 > **Disciplina:** Sistemas Operacionais
 
-Este projeto implementa um **simulador visual de um sistema operacional multitarefa**. Ele permite visualizar o comportamento de diferentes algoritmos de escalonamento, gerando gráficos de Gantt automaticamente e oferecendo modos de execução passo-a-passo com recursos avançados de depuração e "viagem no tempo" (undo).
+Este projeto implementa um **simulador visual de um sistema operacional multitarefa**. Ele permite visualizar o comportamento de diferentes algoritmos de escalonamento, **operações de Entrada/Saída (E/S) e sincronização por Mutex**, gerando gráficos de Gantt automaticamente e oferecendo modos de execução passo-a-passo com recursos avançados de depuração e "viagem no tempo" (undo).
 
 ---
 
@@ -30,13 +29,23 @@ Este projeto implementa um **simulador visual de um sistema operacional multitar
 * **Prioridade com Envelhecimento (PRIOPEnv):** Preemptivo. Utiliza o parâmetro **Alpha** para prevenir inanição (_starvation_).
 * **Plugins Externos:** Capacidade de carregar algoritmos personalizados via Python sem recompilar.
 
+### Simulação de Recursos e E/S
+
+* **Operações de E/S Assíncronas:** Simula tarefas que liberam a CPU para realizar operações de disco/rede (representadas visualmente no gráfico).
+* **Sincronização (Mutex):** Suporte a bloqueio e desbloqueio de recursos compartilhados (`Lock`/`Unlock`), incluindo lógica de **Herança de Prioridade** para evitar inversão de prioridade.
+
 ### Visualização e Interatividade
 
-* **Geração de Gráficos:** Gera arquivos PNG do Gráfico de Gantt, diferenciando tempo de execução (cor) e tempo de espera (sombra cinza).
+* **Geração de Gráficos:** Gera arquivos PNG do Gráfico de Gantt detalhado:
+  * **Cores Sólidas:** Tempo de execução (CPU).
+  * **Sombra Cinza:** Tempo de espera na fila de prontos.
+  * **Amarelo/Laranja (IO):** Tempo de bloqueio por Entrada/Saída.
+  * **Vermelho/Rosa:** Tempo de bloqueio aguardando liberação de Mutex.
+  * **Marcadores:** Triângulos indicam aquisição (`ML`) e liberação (`MU`) de recursos.
 * **Modo Debugger (Passo-a-Passo):**
-  * Visualização do estado da CPU e Filas a cada *tick*.
+  * Visualização do estado da CPU, Filas e Tarefas Bloqueadas a cada *tick*.
   * **Time Travel (Undo):** Permite voltar no tempo para desfazer ações (`v`).
-  * **Inserção Dinâmica:** Permite adicionar novas tarefas durante a execução (`n`).
+  * **Inserção Dinâmica:** Permite adicionar novas tarefas (com ações de E/S) durante a execução (`n`).
   * Atualização do gráfico em tempo real.
 * **Portabilidade Total:** Execução via Docker, garantindo funcionamento em qualquer máquina Linux.
 
@@ -73,18 +82,28 @@ A imagem do projeto já está compilada e hospedada no Docker Hub. Você não pr
 
      ~~~plaintext
      ALGORITMO;QUANTUM[;ALPHA]
-     ID;COR;TEMPO_INGRESSO;DURACAO;PRIORIDADE
+     ID;COR;TEMPO_INGRESSO;DURACAO;PRIORIDADE[;ACOES...]
      ...
      ~~~
 
      > **Nota:** O campo opcional `;ALPHA` só deve ser incluído ao usar algoritmos com envelhecimento como o `PRIOPEnv`.
 
-   * Exemplo (`config.txt`) utilizando o Envelhecimento:
+   * **Definindo Ações (E/S e Mutex):**
+     As ações são opcionais e separadas por ponto-e-vírgula no final da linha. O tempo é sempre relativo ao início da execução da tarefa.
+     * **E/S (Input/Output):** `IO:inicio-duracao`
+       * Ex: `IO:2-5` (No tempo de execução 2, sai para E/S por 5 ticks).
+     * **Mutex Lock:** `MLid:tempo`
+       * Ex: `ML1:0` (Tenta pegar o Mutex 1 no tempo 0).
+     * **Mutex Unlock:** `MUid:tempo`
+       * Ex: `MU1:4` (Libera o Mutex 1 no tempo 4).
+
+   * Exemplo Completo (`config.txt`):
 
      ~~~plaintext
-     PRIOPEnv;2;2
-     T1;red;0;20;1
-     T2;blue;2;20;10
+     ROUNDROBIN;4
+     T_CpuPura; #e74c3c; 0; 10; 1
+     T_IO;      #3498db; 0; 8;  2; IO:2-5
+     T_Mutex;   #2ecc71; 2; 8;  3; ML1:1; MU1:6
      ~~~
 
 3. **Execute o simulador**
@@ -117,7 +136,7 @@ Ao iniciar, você verá as seguintes opções no terminal:
 
 * `Enter`: Avança um *tick* no tempo.
 * `v`: Volta um *tick* (Desfazer / Undo).
-* `n`: Nova Tarefa. Permite inserir uma tarefa manualmente no meio da execução.
+* `n`: Nova Tarefa. Permite inserir uma tarefa manualmente no meio da execução (suporta sintaxe de E/S).
 * `s`: Sair do modo passo-a-passo.
 
 ---
@@ -178,7 +197,7 @@ Se você baixar o código-fonte, esta é a organização:
 ├── requirements.txt    # Dependências Python (matplotlib)
 └── simulator/          # Biblioteca Core (Package)
     ├── __init__.py     # Marcador de pacote
-    ├── core.py         # Motor da simulação (Loop, TCB, Snapshot)
+    ├── core.py         # Motor da simulação (Loop, TCB, Snapshot, E/S, Mutex)
     ├── schedulers.py   # Implementação dos algoritmos nativos
     ├── parser.py       # Leitor de config e carregador de plugins
     └── gantt.py        # Gerador de gráficos (Matplotlib)

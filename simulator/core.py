@@ -22,6 +22,9 @@ class TCB:
         self.quantum_utilizado = 0
         self.tick_conclusao = -1
         self.acoes = []
+        
+        #Para o Banqueiro saber o que a tarefa vai precisar no futuro
+        self.recursos_maximos = set()
 
     def __repr__(self):
         return (f"TCB(id={self.id}, pd={self.prioridade_dinamica}, exec={self.tempo_executado}/{self.duracao})")
@@ -101,7 +104,79 @@ class Simulator:
         )
         return "\n".join([header, log_info, exec_info, fila_info + bloq_info, tasks_info])
 
-    # --- Auxiliar para acoes das tarefas ---
+    # ALGORITMO DO BANQUEIRO, estado Seguro
+    def verificar_estado_seguro(self):
+        """
+        Executa o Algoritmo do Banqueiro.
+        Simula se existe uma sequência onde todos podem terminar.
+        """
+        todos_mutexes = set()
+        for t in self.tarefas:
+            todos_mutexes.update(t.recursos_maximos)
+        
+        mutexes_ocupados = set(self.mutex_estado.keys())
+        trabalho = todos_mutexes - mutexes_ocupados # Mutexes Disponiveis
+        
+        #matriz de alocacao
+        alocacao = {t.id: set() for t in self.tarefas}
+        for m_id, dono_id in self.mutex_estado.items():
+            if dono_id in alocacao:
+                alocacao[dono_id].add(m_id)
+        # vetor de finalizacao
+        terminados = {}
+        for t in self.tarefas:
+            if t.estado == TaskState.TERMINADA:
+                terminados[t.id] = True
+            else:
+                terminados[t.id] = False
+	#simulacao dos cenarios
+        while True:
+            progresso_feito = False
+            for t in self.tarefas:
+                if not terminados[t.id]:
+                    # Need = Max - Allocation
+                    necessidade = t.recursos_maximos - alocacao[t.id]
+                    
+                    if necessidade.issubset(trabalho):
+                        # Simula execução: tarefa termina e devolve recursos
+                        trabalho.update(alocacao[t.id])
+                        terminados[t.id] = True
+                        progresso_feito = True
+            
+            if not progresso_feito:
+                break
+        
+        # Se todos conseguem terminar, o estado é seguro
+        return all(terminados.values())
+
+    # Acorda tarefas barradas pelo Banqueiro
+    def tentar_desbloquear_espera_segura(self):
+        log_desbloqueio = ""
+        # Verifica todas as filas de mutex
+        for m_id, fila in self.mutex_fila.items():
+            if not fila: continue
+            
+            # Só nos interessa se o recurso está livre (dono is None).
+            # Se estiver ocupado, o desbloqueio normal do MU cuida dele.
+            if self.mutex_estado.get(m_id) is None:
+                candidato = fila[0]
+                
+                # Simula alocação
+                self.mutex_estado[m_id] = candidato.id
+                eh_seguro = self.verificar_estado_seguro()
+                
+                if eh_seguro:
+                    # Agora é seguro, acorda a tarefa.
+                    t_acordada = fila.pop(0)
+                    t_acordada.estado = TaskState.PRONTA
+                    self.fila_prontos.append(t_acordada)
+                    log_desbloqueio += f" [Banqueiro Liberou: {t_acordada.id} para M{m_id}] "
+                else:
+                    # Ainda inseguro, desfaz
+                    del self.mutex_estado[m_id]
+        return log_desbloqueio
+
+    # Auxiliar para acoes das tarefas
     def processar_acoes_da_tarefa(self, t):
         """Processa as ações da tarefa t no tempo atual. Retorna (log_str, bloqueou)."""
         log_acoes = ""
@@ -123,20 +198,23 @@ class Simulator:
             elif tipo == 'ML': 
                 m_id = acao['mutex']
                 dono = self.mutex_estado.get(m_id)
-                if dono is None:
-                    self.mutex_estado[m_id] = t.id
-                    log_acoes += f" [Lock M{m_id} Sucesso] "
+                
+                # 1. Eu já sou o dono? (Pré-alocado pelo Banqueiro)
+                if dono == t.id:
+                    log_acoes += f" [Lock M{m_id} Confirmado (Pré-alocado)] "
                     self.mutex_event_log.append({
                         'tick': self.relogio_global, 'task_id': t.id, 'tipo': 'ML', 'mutex': m_id
                     })
                     t.acoes.remove(acao)
-                else:
-                    log_acoes += f" [Lock M{m_id} FALHA -> Bloqueado] "
+
+                # 2. Outra pessoa é dona? Bloqueia.
+                elif dono is not None:
+                    log_acoes += f" [Lock M{m_id} Ocupado -> Bloqueado] "
                     self.mutex_event_log.append({
                         'tick': self.relogio_global, 'task_id': t.id, 'tipo': 'ML_FAIL', 'mutex': m_id
                     })
                     
-                    # Herança
+                    # Herança de Prioridade
                     dono_id = self.mutex_estado[m_id]
                     t_dono = next((x for x in self.tarefas if x.id == dono_id), None)
                     if t_dono and t.prioridade_dinamica > t_dono.prioridade_dinamica:
@@ -145,11 +223,34 @@ class Simulator:
                         log_acoes += f" [Herança: {t_dono.id} ({prio_antiga}->{t_dono.prioridade_dinamica}) de {t.id}] "
 
                     t.estado = TaskState.BLOQUEADA
-                    if m_id not in self.mutex_fila:
-                        self.mutex_fila[m_id] = []
+                    if m_id not in self.mutex_fila: self.mutex_fila[m_id] = []
                     self.mutex_fila[m_id].append(t)
                     bloqueou = True
-                    break 
+                    break
+
+                # 3. Está livre? Verifica Banqueiro
+                else:
+                    self.mutex_estado[m_id] = t.id
+                    eh_seguro = self.verificar_estado_seguro()
+                    
+                    if eh_seguro:
+                        log_acoes += f" [Lock M{m_id} Sucesso (Seguro)] "
+                        self.mutex_event_log.append({
+                            'tick': self.relogio_global, 'task_id': t.id, 'tipo': 'ML', 'mutex': m_id
+                        })
+                        t.acoes.remove(acao)
+                    else:
+                        del self.mutex_estado[m_id]
+                        log_acoes += f" [Lock M{m_id} NEGADO (Inseguro) -> Bloqueado] "
+                        self.mutex_event_log.append({
+                            'tick': self.relogio_global, 'task_id': t.id, 'tipo': 'ML_FAIL', 'mutex': m_id
+                        })
+                        
+                        t.estado = TaskState.BLOQUEADA
+                        if m_id not in self.mutex_fila: self.mutex_fila[m_id] = []
+                        self.mutex_fila[m_id].append(t)
+                        bloqueou = True
+                        break
                     
             elif tipo == 'MU': 
                 m_id = acao['mutex']
@@ -165,11 +266,23 @@ class Simulator:
                         'tick': self.relogio_global, 'task_id': t.id, 'tipo': 'MU', 'mutex': m_id
                     })
                     t.acoes.remove(acao)
+                    
+                    # 1. Desbloqueio Padrão (Fila de espera normal)
                     if m_id in self.mutex_fila and self.mutex_fila[m_id]:
-                        t_acordada = self.mutex_fila[m_id].pop(0)
-                        t_acordada.estado = TaskState.PRONTA
-                        self.fila_prontos.append(t_acordada)
-                        log_acoes += f" [{t_acordada.id} Desbloqueada] "
+                        candidato = self.mutex_fila[m_id][0]
+                        # Banqueiro de novo para garantir
+                        self.mutex_estado[m_id] = candidato.id
+                        if self.verificar_estado_seguro():
+                            t_acordada = self.mutex_fila[m_id].pop(0)
+                            t_acordada.estado = TaskState.PRONTA
+                            self.fila_prontos.append(t_acordada)
+                            log_acoes += f" [{t_acordada.id} Desbloqueada] "
+                        else:
+                            del self.mutex_estado[m_id]
+
+                    # 2. Desbloqueio Global (Banqueiro)
+                    log_acoes += self.tentar_desbloquear_espera_segura()
+
                 else:
                     log_acoes += f" [Erro Unlock M{m_id}: Não é dono] "
                     t.acoes.remove(acao)
@@ -237,14 +350,27 @@ class Simulator:
                     t.tick_conclusao = self.relogio_global 
                     self.tarefas_concluidas += 1
                     log_eventos_tick += f" [{t.id} Terminou] "
+                    
+                    # Libera recursos ao terminar
                     mutexes_possuidos = [k for k,v in self.mutex_estado.items() if v == t.id]
+                    liberou_algo = False
                     for m_id in mutexes_possuidos:
                         del self.mutex_estado[m_id]
                         if m_id in self.mutex_fila and self.mutex_fila[m_id]:
-                            t_acordada = self.mutex_fila[m_id].pop(0)
-                            t_acordada.estado = TaskState.PRONTA
-                            self.fila_prontos.append(t_acordada)
-                            precisa_escalonar = True
+                            candidato = self.mutex_fila[m_id][0]
+                            self.mutex_estado[m_id] = candidato.id
+                            if self.verificar_estado_seguro():
+                                t_acordada = self.mutex_fila[m_id].pop(0)
+                                t_acordada.estado = TaskState.PRONTA
+                                self.fila_prontos.append(t_acordada)
+                            else:
+                                del self.mutex_estado[m_id]
+                        liberou_algo = True
+                    
+                    # Se liberou, reavaliar o Banqueiro Global
+                    if liberou_algo:
+                        log_eventos_tick += self.tentar_desbloquear_espera_segura()
+
                     self.tarefa_executando = None
                     precisa_escalonar = True 
                 elif t.quantum_utilizado == self.quantum and self.escalonador.usar_quantum:
@@ -282,16 +408,11 @@ class Simulator:
                     self.tarefa_executando.quantum_utilizado = 0
                     log_eventos_tick += f" [Escalonador escolheu {self.tarefa_executando.id}] "
 
-                    # BUG DO TEMPO 0
-                    # Se trocamos de tarefa, a nova tarefa (proxima_tarefa) precisa ter suas ações 
-                    # do tempo atual (que geralmente é 0) verificadas imediatamente.
-                    # Caso contrário, ela só seria verificada no próximo tick com tempo=1.
+                    # BUG DO TEMPO 0 / Self-Lock check
                     log_acoes_nova, bloqueou_nova = self.processar_acoes_da_tarefa(self.tarefa_executando)
                     log_eventos_tick += log_acoes_nova
                     if bloqueou_nova:
                          self.tarefa_executando = None
-                         # Se ela bloqueou logo na entrada, ela não executa neste tick.
-                         # O tempo não será incrementado abaixo.
         
         elif self.tarefa_executando and preemptar_quantum:
              self.tarefa_executando.quantum_utilizado = 0

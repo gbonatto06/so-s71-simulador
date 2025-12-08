@@ -9,16 +9,10 @@ from simulator.schedulers import FIFO, SRTF, PriorityPreemptive, PriorityAging, 
 
 def _normalizar_cor(cor_str):
     cor_limpa = cor_str.strip()
-    
-    # 1. Se for Hexadecimal sem '#', adiciona
     if re.fullmatch(r'[0-9A-Fa-f]{6}', cor_limpa):
         cor_limpa = f"#{cor_limpa}"
-    
-    # 2. Validação, o Matplotlib consegue desenhar isso?
-    # Isso barra "azul", "vermelho", strings aleatórias, etc.
     if not mcolors.is_color_like(cor_limpa):
         raise ValueError(f"Cor '{cor_str}' inválida. Use HEX (#RRGGBB) ou nomes em Inglês (red, blue, etc).")
-        
     return cor_limpa
 
 def carregar_plugins(diretorio_plugins="extensions"):
@@ -44,7 +38,6 @@ def carregar_plugins(diretorio_plugins="extensions"):
 
 def obter_escalonador(algoritmo_nome, quantum, alpha=0, plugins_externos=None):
     algoritmo_upper = algoritmo_nome.upper()
-    
     if plugins_externos and algoritmo_upper in plugins_externos:
         cls = plugins_externos[algoritmo_upper]
         try: return cls(alpha)
@@ -89,8 +82,6 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
             partes = linha.strip().split(';')
             if len(partes) < 5: raise ValueError(f"Linha {i} mal formatada.")
             
-            # O _normalizar_cor agora lança exceção se a cor for inválida
-            # Isso será capturado pelo 'except Exception as e' abaixo
             tcb = TCB(
                 partes[0].strip(), 
                 _normalizar_cor(partes[1]), 
@@ -99,26 +90,20 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
                 int(partes[4])
             )
             
-            # Parsing de acoes (Mutex e IO)
             if len(partes) > 5:
                 acoes_cruas = partes[5:]
                 acoes_parseadas = []
                 for item in acoes_cruas:
                     item = item.strip()
                     if not item: continue
-                    
                     try:
-                        # Verifica se é I/O
                         if item.startswith("IO:"):
-                            # Formato IO:xx-yy
-                            resto = item[3:].split('-') # xx, yy
+                            resto = item[3:].split('-')
                             inicio_io = int(resto[0])
                             duracao_io = int(resto[1])
                             
-                            # Validação de tempo e Duração Mínima
                             if inicio_io >= tcb.duracao:
                                 raise ValueError(f"Tempo da E/S {item} ({inicio_io}) excede duração da tarefa.")
-                            
                             if duracao_io < 1:
                                 raise ValueError(f"Duração da E/S {item} deve ser no mínimo 1 (Req 3.4).")
 
@@ -126,11 +111,9 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
                                 'tipo': 'IO',
                                 'tempo': inicio_io,
                                 'duracao_io': duracao_io,
-                                'ordem_original': len(acoes_parseadas) # Auxiliar para estabilidade (Req 3.5)
+                                'ordem_original': len(acoes_parseadas) 
                             })
-
                         else:
-                            # Processamento padrão Mutex (ML/MU)
                             tipo = item[:2].upper() 
                             resto = item[2:].split(':')
                             mutex_id = int(resto[0])
@@ -139,7 +122,6 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
                             if tipo not in ['ML', 'MU']:
                                 print(f"Aviso: Ação desconhecida '{item}' na linha {i}. Ignorada.")
                                 continue
-                            
                             if tempo >= tcb.duracao:
                                 raise ValueError(f"Tempo da ação {item} ({tempo}) excede duração da tarefa.")
 
@@ -147,22 +129,19 @@ def carregar_configuracao_arquivo(caminho_arquivo, plugins_externos=None):
                                 'tipo': tipo,
                                 'mutex': mutex_id,
                                 'tempo': tempo,
-                                'ordem_original': len(acoes_parseadas) # Auxiliar para estabilidade
+                                'ordem_original': len(acoes_parseadas)
                             })
+                            # Registra no TCB que esse recurso será necessário
+                            if tipo == 'ML':
+                                tcb.recursos_maximos.add(mutex_id)
 
                     except (ValueError, IndexError) as e:
                         if "excede duração" in str(e) or "Req 3.4" in str(e):
                             raise e 
                         print(f"Aviso: Formato inválido de ação '{item}' na linha {i}. Ignorada.")
                 
-                # Ordenação estável.
-                # Primeiro por tempo, depois pela ordem original de aparição na linha.
                 acoes_parseadas.sort(key=lambda x: (x['tempo'], x['ordem_original']))
-                
-                # Removemos a chave auxiliar para não sujar o objeto TCB
-                for acao in acoes_parseadas:
-                    del acao['ordem_original']
-
+                for acao in acoes_parseadas: del acao['ordem_original']
                 tcb.acoes = acoes_parseadas
 
             simulador.adicionar_tarefa(tcb)

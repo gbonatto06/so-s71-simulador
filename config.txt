@@ -1,5 +1,5 @@
-ROUNDROBIN; 4
-T_Ordem_Correta; azul; 0; 8; 1; ML1:1; IO:1-10; MU1:4
+PRIORIDADEP; 4
+T_Ordem_Correta; blue; 0; 8; 1; ML1:1; IO:1-10; MU1:4
 T_Ordem_Inversa; #2ecc71; 0; 8; 1; IO:1-10; ML2:1; MU2:4
 T_Juiz_M1;       #e74c3c; 5; 3; 1; ML1:0
 T_Juiz_M2;       #9b59b6; 5; 3; 1; ML2:0
